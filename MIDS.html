@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ideology Diagnosis System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        :root {
+            --color-bg: #050505;
+            --color-text: #e0e6ed;
+            --color-accent: #64ffda;
+            --color-dim: #4a5568;
+            
+            /* Type Colors */
+            --color-a: #ff4757; /* 回帰淘汰 Red */
+            --color-b: #2ed573; /* 共命包摂 Green */
+            --color-c: #1e90ff; /* 適応進転 Blue */
+            --color-d: #a4b0be; /* 無差総質 Gray */
+
+            --font-main: 'Noto Sans JP', sans-serif;
+            --font-mono: 'Share Tech Mono', monospace;
+
+            /* Default sizes (will be updated by JS) */
+            --container-width: 900px;
+            --btn-height: 60px;
+            --font-scale: 1;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            font-family: var(--font-main);
+            min-height: 100vh; /* height: 100vh から変更 */
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Desktop Mode: Immersive (No Scroll) */
+        body.mode-desktop {
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Mobile Mode: Scrollable */
+        body.mode-mobile {
+            height: auto;
+            overflow-y: auto;
+            align-items: flex-start; /* Top align for scrolling content */
+            padding: 2rem 0;
+        }
+
+        /* Scanline effect */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .container {
+            width: 100%;
+            max-width: var(--container-width);
+            padding: 2rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: max-width 0.5s ease;
+            /* Glassmorphism subtle */
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        body.mode-desktop .container {
+            height: 90vh;
+        }
+
+        body.mode-mobile .container {
+            height: auto;
+            min-height: 80vh;
+        }
+
+        /* --- Screens --- */
+        .screen {
+            /* Position absolute is good for desktop transitions, but tricky for mobile flow */
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            padding: 2rem; 
+        }
+
+        /* Desktop: Absolute positioning for cross-fading */
+        body.mode-desktop .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Mobile: Relative positioning to allow document flow */
+        body.mode-mobile .screen {
+            display: none; /* Hide by default */
+            position: relative;
+            height: auto;
+            min-height: 60vh;
+        }
+
+        .screen.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        body.mode-mobile .screen.active {
+            display: flex;
+        }
+
+
+        /* --- Typography & Buttons --- */
+        h1 {
+            font-family: var(--font-mono);
+            font-size: calc(2.5rem * var(--font-scale));
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-bottom: 1rem;
+            text-align: center;
+            color: var(--color-accent);
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
+        }
+
+        .subtitle {
+            font-size: calc(1rem * var(--font-scale));
+            color: var(--color-dim);
+            margin-bottom: 3rem;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            background: transparent;
+            border: 1px solid var(--color-accent);
+            color: var(--color-accent);
+            padding: 1rem 3rem;
+            font-size: calc(1.2rem * var(--font-scale));
+            font-family: var(--font-mono);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 20px rgba(100, 255, 218, 0.4);
+        }
+
+        .btn-share {
+            border-color: #1DA1F2; /* Twitter Blue */
+            color: #1DA1F2;
+        }
+        
+        .btn-share:hover {
+            background: #1DA1F2;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(29, 161, 242, 0.4);
+        }
+
+        /* --- Device Selection --- */
+        .device-grid {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+        .device-card {
+            border: 1px solid var(--color-dim);
+            padding: 2rem;
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: center;
+        }
+        .device-card:hover {
+            border-color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.05);
+        }
+        .device-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        /* --- Quiz Layout --- */
+        .progress-container {
+            width: 100%;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        body.mode-desktop .progress-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 1rem 2rem;
+            margin-bottom: 0;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 4px;
+            background: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--color-accent);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--color-accent);
+        }
+
+        .question-box {
+            text-align: center;
+            margin-bottom: 2rem;
+            width: 100%;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .question-text {
+            font-size: calc(1.4rem * var(--font-scale));
+            font-weight: 700;
+            line-height: 1.6;
+        }
+
+        .options-grid {
+            display: grid;
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        
+        /* Layout specific styles handled by JS class injection */
+        body.mode-desktop .options-grid {
+            grid-template-columns: repeat(5, 1fr);
+        }
+        body.mode-mobile .options-grid {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .option-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--color-text);
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: var(--btn-height);
+        }
+        
+        body.mode-mobile .option-btn {
+            flex-direction: row;
+            justify-content: flex-start;
+            padding-left: 1.5rem;
+            gap: 1rem;
+            text-align: left;
+        }
+
+        .option-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--color-accent);
+        }
+
+        /* --- Result --- */
+        .result-content {
+            display: grid;
+            gap: 2rem;
+            align-items: center;
+            width: 100%;
+            /* height: 100%; Remove fixed height for flow layout */
+        }
+        
+        body.mode-desktop .result-content {
+            grid-template-columns: 1fr 1.2fr;
+            padding: 2rem;
+            height: 100%;
+            overflow-y: auto;
+        }
+        body.mode-mobile .result-content {
+            grid-template-columns: 1fr;
+            align-content: start;
+        }
+
+        .chart-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #333 0% 100%); /* Placeholder */
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            margin-bottom: 1rem;
+        }
+        
+        .chart-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 70%;
+            background: var(--color-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 2;
+        }
+
+        .result-text-area {
+            padding: 1.5rem;
+            background: rgba(255,255,255,0.03);
+            border-left: 4px solid var(--color-dim);
+            text-align: left;
+        }
+
+        /* Desktop: Internal scroll if content is too long */
+        body.mode-desktop .result-text-area {
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        /* Mobile: Allow full height expansion */
+        body.mode-mobile .result-text-area {
+            overflow-y: visible;
+            height: auto;
+            max-height: none;
+        }
+
+        .legend {
+            display: flex;
+            gap: 0.8rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-color { width: 8px; height: 8px; border-radius: 50%; }
+
+    </style>
+</head>
+<body class="mode-desktop"> <!-- Default to desktop class for init -->
+
+    <div class="scanline"></div>
+
+    <div class="container" id="main-container">
+        
+        <!-- Screen 0: Device Selection -->
+        <div id="device-screen" class="screen active">
+            <h1>SYSTEM BOOT</h1>
+            <p class="subtitle">SELECT INTERFACE MODE</p>
+            
+            <div class="device-grid">
+                <div class="device-card" onclick="setMode('desktop')">
+                    <span class="device-icon">💻</span>
+                    <div style="font-family: var(--font-mono); font-size: 1.2rem;">DESKTOP</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">広域表示 / マウス操作</div>
+                </div>
+                <div class="device-card" onclick="setMode('mobile')">
+                    <span class="device-icon">📱</span>
+                    <div style="font-family: var(--font-mono); font-size: 1.2rem;">MOBILE</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">縦長表示 / タッチ操作</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 1: Intro -->
+        <div id="intro-screen" class="screen">
+            <h1>Metalepsis_type<br>IDEOLOGY<br>PROFILER</h1>
+            <p class="subtitle">
+                あなたの倫理観、価値観、そして社会への姿勢を解析します。<br>
+                全25問。直感に従って回答してください。
+            </p>
+            <button class="btn" onclick="startQuiz()">INITIALIZE</button>
+        </div>
+
+        <!-- Screen 2: Quiz -->
+        <div id="quiz-screen" class="screen">
+            <div class="progress-container">
+                <div class="progress-bar-bg">
+                    <div id="progress-fill" class="progress-bar-fill"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.8rem; color:var(--color-dim);">
+                    <span id="section-title">SECTION 1</span>
+                    <span>Q.<span id="current-q">1</span>/25</span>
+                </div>
+            </div>
+
+            <div class="question-box">
+                <p id="question-text" class="question-text">読み込み中...</p>
+            </div>
+
+            <div class="options-grid">
+                <button class="option-btn" onclick="handleAnswer(2)">
+                    <span style="font-size:1.2rem; color:var(--color-accent)">●</span> <span>非常にそう思う</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(1)">
+                    <span style="font-size:1rem;">○</span> <span>そう思う</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(0)">
+                    <span style="font-size:1rem; opacity:0.5">-</span> <span>どちらとも言えない</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(-1)">
+                    <span style="font-size:1rem;">×</span> <span>そう思わない</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(-2)">
+                    <span style="font-size:1.2rem; color:var(--color-a)">✕</span> <span>非常にそう思わない</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 3: Result -->
+        <div id="result-screen" class="screen">
+            <div class="result-content">
+                <!-- Chart Area -->
+                <div class="chart-wrapper">
+                    <div id="pie-chart" class="chart-container">
+                        <div class="chart-overlay">
+                            <span style="font-size: 0.8rem; color: #888; font-family:var(--font-mono);">CLASS</span>
+                            <span id="result-code" style="font-size: 2.5rem; font-weight:bold; font-family:var(--font-mono);">--</span>
+                        </div>
+                    </div>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰</div>
+                        <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂</div>
+                        <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転</div>
+                        <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質</div>
+                    </div>
+                </div>
+
+                <!-- Text Area -->
+                <div class="result-text-area" id="result-card">
+                    <div id="result-title" style="font-size: 1.4rem; font-weight: bold; margin-bottom: 0.5rem;">分析中...</div>
+                    <div id="result-quote" style="font-style: italic; color: #888; margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">...</div>
+                    <div id="result-desc" style="font-size: 0.95rem; line-height: 1.8;">...</div>
+                    
+                    <div style="margin-top: 2rem; text-align: center; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn" onclick="restartQuiz()" style="padding: 0.5rem 2rem; font-size: 1rem;">RESET</button>
+                        <button class="btn btn-share" onclick="shareOnTwitter()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE (X)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const questions = [
+        // Section 1: 人・命の価値
+        { t: "生まれ持った資質や才能の差は、その人の運命や役割を決定づける重要な要素である。", type: "A", w: 1, s: "人・命の価値" },
+        { t: "弱き者がそのまま生きられる社会よりも、弱き者が強き者へと変われる手助けをする社会こそが健全だ。", type: "C", w: 1, s: "人・命の価値" },
+        { t: "どのような凶悪な犯罪者であっても、その存在の根源的な価値は聖人と同じである。", type: "B", w: 1, s: "人・命の価値" },
+        { t: "個人の『個性』や『自分らしさ』への固執こそが、人間社会に不幸をもたらす元凶だ。", type: "D", w: 1, s: "人・命の価値" },
+        { t: "美しい庭を保つためには、時として雑草を抜くように、社会全体のために一部を間引く決断もやむを得ない。", type: "A", w: 1, s: "人・命の価値" },
+        // Section 2: 倫理観
+        { t: "多様な意見を認め合うことは大切だが、それが結論の先送りや停滞を招くなら、強力なリーダーシップで統一すべきだ。", type: "A", w: 1, s: "倫理観" },
+        { t: "過去の過ちや欠陥を許容する優しさよりも、それを技術やシステムで『二度と起きないように修正する』ことこそが本当の愛だ。", type: "C", w: 1, s: "倫理観" },
+        { t: "誰かが悲しむくらいなら、全員が同じ感情、同じ幸福度で生きられるように調整された世界の方が良い。", type: "D", w: 1, s: "倫理観" },
+        { t: "効率や進化のために誰かが犠牲になることは、倫理的に決して許されない。", type: "B", w: 1, s: "倫理観" },
+        { t: "世界がカオス（混沌）に陥るくらいなら、厳しい規律によって管理された静寂の方が好ましい。", type: "A", w: 1, s: "倫理観" },
+        // Section 3: 社会・統治
+        { t: "社会の構成員は、それぞれの能力に応じて明確に区別・管理されるべきだ。", type: "A", w: 1, s: "社会・統治" },
+        { t: "理想的な社会とは、全ての人間が『同じ顔、同じ思考』を持ち、対立の概念すら消滅した状態である。", type: "D", w: 1, s: "社会・統治" },
+        { t: "現状の肉体や精神に限界を感じるならば、機械化や遺伝子操作を行ってでも『より高次な存在』を目指すべきだ。", type: "C", w: 1, s: "社会・統治" },
+        { t: "役に立たないと思われる存在であっても、それが社会という生態系の一部として機能していることを忘れてはならない。", type: "B", w: 1, s: "社会・統治" },
+        { t: "不平等を是正するために富を分配するより、不平等そのものが無意味になるよう、全員の精神構造を統一する方が根本解決になる。", type: "D", w: 1, s: "社会・統治" },
+        // Section 4: 異物・対立
+        { t: "対立する相手を説得する時間があるなら、相手を『自分と同じ考え』になるようアップデート（改造）してあげた方が互いのためだ。", type: "C", w: 1, s: "異物・対立" },
+        { t: "純粋な水を濁らせないためには、最初から不純物を入れない、あるいは見つけ次第取り除く厳格さが必要だ。", type: "A", w: 1, s: "異物・対立" },
+        { t: "争いは『私』と『あなた』という境界線があるから生まれる。その境界線を溶かしてしまえば平和が訪れる。", type: "D", w: 1, s: "異物・対立" },
+        { t: "理解し合えない他者がいたとしても、その不快感と共に生きることこそが成熟した社会の姿だ。", type: "B", w: 1, s: "異物・対立" },
+        { t: "『欠落』や『病』は、治療し克服すべきエラーであり、それを受け入れて共存するのは敗北に等しい。", type: "C", w: 1, s: "異物・対立" },
+        // Section 5: 究極の選択
+        { t: "世界を救うために『選ばれた1000人』だけを残し、残りを切り捨てる箱舟の扉を、あなたは閉めることができる。", type: "A", w: 1, s: "究極の選択" },
+        { t: "全人類の意識を統合し、個を消滅させることで永遠の平穏が得られるスイッチがあるなら、迷わず押すべきだ。", type: "D", w: 1, s: "究極の選択" },
+        { t: "致死率の高いウイルスが蔓延した際、人権を無視してでも全市民に強制的に人体改造（ワクチン以上の身体強化）を施すべきだ。", type: "C", w: 1, s: "究極の選択" },
+        { t: "たとえ人類が滅亡するとしても、誰かの命を意図的に選別したり、強制的に変質させたりする権利は誰にもない。", type: "B", w: 1, s: "究極の選択" },
+        { t: "『不完全なまま愛し合う世界』と『完全無欠で孤独な世界』。選ぶなら前者だ。", type: "B", w: 1, s: "究極の選択" }
+    ];
+
+    const resultsData = {
+        // Pure Types
+        A: { title: "回帰淘汰主義的思考 (Purist)", quote: "「穢れなき原点へ。それが唯一の救済だ。」", desc: "世界が本来あるべき「美しい秩序」を望みます。混沌を嫌い、たとえ残酷な決断であっても、大義のためには不要なものを切り捨てる覚悟を持っています。純粋性を愛するあまり、自身をも断罪する危うさがあります。", color: "#ff4757" },
+        B: { title: "共命包摂主義的思考 (Symbiot)", quote: "「清濁併せ呑み、共に泥の中を歩こう。」", desc: "どのような命や思想も否定しない慈愛の持ち主です。効率よりも「今ある命」の尊厳を優先します。しかし、その優しさは時に問題を先送りにし、全員共倒れになるリスクも孕んでいます。", color: "#2ed573" },
+        C: { title: "適応進転主義的思考 (Evolver)", quote: "「弱さは罪ではない。修正すべきエラーだ。」", desc: "現状を未完成と捉え、技術や意思で進化を目指す革新者です。「変わること」を善とし、停滞を悪とします。進化についていけない者を、悪気なく「旧式」として処理する冷徹さが潜んでいます。", color: "#1e90ff" },
+        D: { title: "無差総質主義的思考 (Equalizer)", quote: "「私があなたで、あなたが私なら、争いは起きない。」", desc: "争いの根源である「個体差」を否定し、究極の平等を求めます。それは精神や意識の同質化へと向かいます。完全な平和を約束しますが、それは「個人の死」を意味するかもしれません。", color: "#a4b0be" },
+
+        // Hybrid Types (New & Existing)
+        AB: { title: "聖域守護主義 (Guardian)", quote: "「この庭の平穏だけは、何としても死守する。」", desc: "【回帰淘汰 × 共命包摂】<br>内側の者には無限の愛を注ぎますが、外敵には容赦ない排他性を発揮します。家族や仲間を守るためなら鬼になれる、閉鎖的な楽園の管理者です。", color: "#eebb44" },
+        AC: { title: "完全主義的独裁 (Perfectionist)", quote: "「選ばれた優秀な者が、さらに進化する。」", desc: "【回帰淘汰 × 適応進転】<br>弱者を切り捨て、残った強者をさらに強化しようとするエリート思想。強烈なカリスマ性を持ちますが、弱者にとっては地獄のような世界を作るでしょう。", color: "#a29bfe" },
+        AD: { title: "統制全体主義 (Totalitarian)", quote: "「乱れなき行進。例外は許されない。」", desc: "【回帰淘汰 × 無差総質】<br>秩序維持のために、個性を徹底的に排除する管理社会の理想形。すべての市民が同じ規格、同じ思想で動く、美しくも恐ろしい機械仕掛けの世界を望みます。", color: "#ff6b81" },
+        BC: { title: "全救済進化主義 (Universal Uplift)", quote: "「誰も置き去りにしない。全員で神になる。」", desc: "【共命包摂 × 適応進転】<br>弱者を切り捨てるのではなく、技術や教育で全員を強者へ引き上げようとする理想家。コストと時間がかかりすぎ、破綻する可能性が高い夢物語でもあります。", color: "#00d2d3" },
+        BD: { title: "平和的停滞 (Peace Keeper)", quote: "「みんな違ってみんないい。でも、同じならもっといい。」", desc: "【共命包摂 × 無差総質】<br>争いを極端に恐れる事なかれ主義。多様性を認めつつも、本音では波風の立たない均質な世界を望んでいます。優しいディストピアの住人です。", color: "#55efc4" },
+        CD: { title: "集合知性主義 (Hive Mind)", quote: "「個を捨てよ。全となりて永遠を生きよ。」", desc: "【適応進転 × 無差総質】<br>個人の限界を技術で突破し、意識を統合することで進化しようとする思想。SF的な集合精神（ボーグや群体）こそが、人類の最終到達点だと信じています。", color: "#54a0ff" },
+
+        NEUTRAL: { title: "中立主義的思考 (The Observer)", quote: "「世界の天秤を眺める観測者」", desc: "どの思想にも理解を示し、同時に距離を置いています。バランサーとして機能しますが、決断を下せず時代の波に流されるだけの存在になる危険性もあります。", color: "#ffffff" }
+    };
+
+    // --- State ---
+    let currentQIndex = 0;
+    let scores = { A: 0, B: 0, C: 0, D: 0 };
+    let currentMode = 'desktop';
+
+    // --- DOM Elements ---
+    const deviceScreen = document.getElementById('device-screen');
+    const introScreen = document.getElementById('intro-screen');
+    const quizScreen = document.getElementById('quiz-screen');
+    const resultScreen = document.getElementById('result-screen');
+    const body = document.body;
+    const container = document.getElementById('main-container');
+
+    // --- UI Logic ---
+    function setMode(mode) {
+        currentMode = mode;
+        body.className = `mode-${mode}`;
+        const root = document.documentElement;
+
+        if (mode === 'mobile') {
+            root.style.setProperty('--container-width', '450px');
+            root.style.setProperty('--btn-height', '80px');
+            root.style.setProperty('--font-scale', '0.9');
+        } else {
+            root.style.setProperty('--container-width', '900px');
+            root.style.setProperty('--btn-height', '60px');
+            root.style.setProperty('--font-scale', '1');
+        }
+
+        switchScreen(deviceScreen, introScreen);
+    }
+
+    function switchScreen(from, to) {
+        // Different Transition for Mobile (Simple fade-in) vs Desktop (Crossfade)
+        if (currentMode === 'mobile') {
+            // For mobile, we just hide/show to avoid position absolute conflicts
+            from.classList.remove('active');
+            from.style.opacity = 0;
+            
+            to.classList.add('active');
+            gsap.fromTo(to, {opacity: 0}, {opacity: 1, duration: 0.5});
+        } else {
+            // Desktop standard animation
+            gsap.to(from, {
+                opacity: 0, 
+                duration: 0.3, 
+                onComplete: () => {
+                    from.classList.remove('active');
+                    to.classList.add('active');
+                    gsap.fromTo(to, {opacity: 0, scale: 0.95}, {opacity: 1, scale: 1, duration: 0.5, ease: "power2.out"});
+                }
+            });
+        }
+    }
+
+    // --- Quiz Logic ---
+    function startQuiz() {
+        currentQIndex = 0;
+        scores = { A: 0, B: 0, C: 0, D: 0 };
+        switchScreen(introScreen, quizScreen);
+        renderQuestion();
+    }
+
+    function renderQuestion() {
+        const q = questions[currentQIndex];
+        const qText = document.getElementById('question-text');
+        
+        gsap.fromTo(qText, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.4 });
+
+        qText.innerText = q.t;
+        document.getElementById('section-title').innerText = `SEC.${Math.floor(currentQIndex/5) + 1}: ${q.s}`;
+        document.getElementById('current-q').innerText = currentQIndex + 1;
+        
+        const progress = ((currentQIndex) / questions.length) * 100;
+        document.getElementById('progress-fill').style.width = `${progress}%`;
+    }
+
+    function handleAnswer(value) {
+        // Guard clause for safety against double-clicks at the end of the quiz
+        if (currentQIndex >= questions.length) return;
+
+        const q = questions[currentQIndex];
+        scores[q.type] += (value * q.w);
+
+        currentQIndex++;
+        if (currentQIndex < questions.length) {
+            renderQuestion();
+        } else {
+            showResult();
+        }
+    }
+
+    function showResult() {
+        document.getElementById('progress-fill').style.width = '100%';
+
+        // Chart Data Calculation
+        let chartData = {
+            A: Math.max(0, scores.A + 10),
+            B: Math.max(0, scores.B + 10),
+            C: Math.max(0, scores.C + 10),
+            D: Math.max(0, scores.D + 10)
+        };
+        const total = Object.values(chartData).reduce((a, b) => a + b, 0) || 1;
+        
+        // Sorting for Winner Determination
+        let sorted = Object.keys(scores).sort((a, b) => scores[b] - scores[a]);
+        let first = sorted[0];
+        let second = sorted[1];
+        let diff = scores[first] - scores[second];
+
+        // Standard Deviation for Neutral
+        const values = Object.values(scores);
+        const mean = values.reduce((a, b) => a + b) / 4;
+        const sd = Math.sqrt(values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / 4);
+        
+        let resultKey = first;
+
+        if (sd < 2.5) {
+            resultKey = "NEUTRAL";
+        } else if (diff <= 5) {
+            // Create Hybrid Key (alphabetical order ensures AB, AC etc.)
+            let hybrid = [first, second].sort().join("");
+            if (resultsData[hybrid]) {
+                resultKey = hybrid;
+            }
+        }
+
+        const data = resultsData[resultKey] || resultsData[first];
+
+        // Render Result
+        switchScreen(quizScreen, resultScreen);
+        
+        // Chart Animation
+        const pA = (chartData.A / total) * 100;
+        const pB = (chartData.B / total) * 100;
+        const pC = (chartData.C / total) * 100;
+        const pD = (chartData.D / total) * 100;
+
+        const chartObj = { a: 0, b: 0, c: 0, d: 0 };
+        gsap.to(chartObj, {
+            a: pA, b: pB, c: pC, d: pD,
+            duration: 1.5,
+            ease: "power2.out",
+            onUpdate: () => {
+                const stops = [
+                    `var(--color-a) 0% ${chartObj.a}%`,
+                    `var(--color-b) ${chartObj.a}% ${chartObj.a + chartObj.b}%`,
+                    `var(--color-c) ${chartObj.a + chartObj.b}% ${chartObj.a + chartObj.b + chartObj.c}%`,
+                    `var(--color-d) ${chartObj.a + chartObj.b + chartObj.c}% 100%`
+                ];
+                document.getElementById('pie-chart').style.background = `conic-gradient(from 0deg, ${stops.join(', ')})`;
+            }
+        });
+
+        // DOM Updates
+        document.getElementById('result-code').innerText = resultKey;
+        document.getElementById('result-code').style.color = data.color;
+        
+        const rTitle = document.getElementById('result-title');
+        const rQuote = document.getElementById('result-quote');
+        const rDesc = document.getElementById('result-desc');
+        const rCard = document.getElementById('result-card');
+
+        rTitle.innerText = data.title;
+        rTitle.style.color = data.color;
+        rCard.style.borderLeftColor = data.color;
+        
+        rQuote.innerHTML = data.quote;
+        rDesc.innerHTML = data.desc;
+
+        gsap.from([rCard], { y: 30, opacity: 0, duration: 0.8, delay: 0.2 });
+    }
+
+    function shareOnTwitter() {
+        const title = document.getElementById('result-title').innerText;
+        const quote = document.getElementById('result-quote').innerText;
+        
+        const text = `【Mtps_思想診断システム】\n診断結果: ${title}\n${quote}\n\nあなたの思想を解析します。`;
+        const hashtags = "Mtps思想診断";
+        const url = "https://unknownthedeltia.github.io/mip";
+
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${hashtags}&url=${encodeURIComponent(url)}`;
+        
+        window.open(tweetUrl, '_blank');
+    }
+
+    function restartQuiz() {
+        switchScreen(resultScreen, deviceScreen);
+    }
+</script>
+</body>
+</html>
