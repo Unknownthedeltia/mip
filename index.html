@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mtps思想診断</title>
+    <title>Ideology Diagnosis System V11</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -603,7 +603,7 @@
 
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>Metalepsis_ Type<br>IDEOLOGY PROFILER v1.1</h1>
+            <h1>IDEOLOGY<br>PROFILER v11</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
@@ -691,9 +691,10 @@
                 <div class="db-section">
                     <h2 class="db-h2">2. 判定ロジック</h2>
                     <div style="font-size: 0.9rem; line-height: 1.8;">
+                        <p><strong>採点方式:</strong> 全て加点方式です。「そう思わない」と回答した場合、対立する思想（A⇔B, C⇔D）に加点されます。</p>
                         <p><strong>1. 中立判定 (Neutral):</strong> スコアのばらつきが極端に小さい場合、「観測者」と判定されます。</p>
                         <p><strong>2. 複合判定 (Hybrid/Tri-brid):</strong> 上位スコアの差が僅差（15%以内）の場合、複数の思想を併せ持つと判定されます。</p>
-                        <p><strong>3. 単独判定 (+/-):</strong> 1つの思想が突出している場合。獲得スコア割合が<strong>40%以上なら「熱狂（+）」</strong>、40%未満なら「穏健（-）」と判定されます。</p>
+                        <p><strong>3. 単独判定 (+/-):</strong> 1つの思想が突出している場合。獲得スコアが<strong>理論上の満点の40%以上</strong>なら「熱狂（+）」、未満なら「穏健（-）」と判定されます。</p>
                     </div>
                 </div>
 
@@ -730,6 +731,14 @@
             </div>
 
             <div class="options-grid">
+                <!-- 
+                    Updated Logic:
+                    Value 2: Agree Strong -> +2 to Type
+                    Value 1: Agree -> +1 to Type
+                    Value 0: Neutral -> +0
+                    Value -1: Disagree -> +1 to Counter Type
+                    Value -2: Disagree Strong -> +2 to Counter Type
+                -->
                 <button class="option-btn" onclick="handleAnswer(2)">
                     <span style="font-size:1.2rem; color:var(--color-accent)">●</span> <span>非常にそう思う</span>
                 </button>
@@ -755,15 +764,12 @@
                 <div class="chart-wrapper">
                     <div id="pie-chart" class="chart-container">
                         <div class="chart-overlay">
-                            <span style="font-size: 0.8rem; color: #888; font-family:var(--font-mono);">Type</span>
+                            <span style="font-size: 0.8rem; color: #888; font-family:var(--font-mono);">CLASS</span>
                             <span id="result-code" style="font-size: 2.5rem; font-weight:bold; font-family:var(--font-mono);">--</span>
                         </div>
                     </div>
                     <div class="legend" id="result-legend">
-                        <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰 (A)</div>
-                        <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂 (B)</div>
-                        <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転 (C)</div>
-                        <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質 (D)</div>
+                        <!-- JS renders here -->
                     </div>
                 </div>
 
@@ -897,38 +903,39 @@
     // --- Results Data ---
     const resultsData = {
         // --- Plus Types (Fanatic) ---
-        "A+": { title: "[A+] 絶対純血主義 (Purist Zealot)", quote: "「一滴の濁りも許さない。完全なる白こそが正義だ。」", desc: "【回帰淘汰・極】<br>あなたは極めて強力な秩序の守護者です。不純物や異端に対する許容度はゼロに等しく、理想の世界のためならあらゆる犠牲を正当化します。その潔癖さは神聖ですが、同時に息苦しいほどの抑圧を生むでしょう。", color: "#ff0033" },
-        "B+": { title: "[B+] 無限博愛主義 (Saint)", quote: "「全ての罪を赦そう。私がその身代わりになる。」", desc: "【共命包摂・極】<br>自己を完全に滅却して他者に尽くす、聖人のような精神性です。敵対する者さえも愛そうとしますが、その無制限の受容は、悪意ある者につけ込まれ、組織や社会を内部から崩壊させる隙にもなり得ます。", color: "#00ff88" },
-        "C+": { title: "[C+] 超越進化主義 (Singularity)", quote: "「肉体は枷だ。人間であることを辞める時が来た。」", desc: "【適応進転・極】<br>進化のためなら倫理も感情も人間性も躊躇なく捨て去るマッドサイエンティスト的思考です。もはやあなたは人類という種の枠組みを超え、新たな知的生命体へと変貌しようとしています。", color: "#0066ff" },
-        "D+": { title: "[D+] 全一集合主義 (The One)", quote: "「個は幻影に過ぎない。我々は一つに溶け合うのだ。」", desc: "【無差総質・極】<br>個人の自我を完全に否定し、全体意識との融合を渇望しています。あなたにとって孤独とは死以上の恐怖であり、全ての境界線が消滅した海のような意識状態こそが至高の幸福です。", color: "#888888" },
+        "A+": { title: "絶対純血主義 (Purist Zealot)", quote: "「一滴の濁りも許さない。完全なる白こそが正義だ。」", desc: "【回帰淘汰・極】<br>あなたは極めて強力な秩序の守護者です。不純物や異端に対する許容度はゼロに等しく、理想の世界のためならあらゆる犠牲を正当化します。その潔癖さは神聖ですが、同時に息苦しいほどの抑圧を生むでしょう。", color: "#ff0033" },
+        "B+": { title: "無限博愛主義 (Saint)", quote: "「全ての罪を赦そう。私がその身代わりになる。」", desc: "【共命包摂・極】<br>自己を完全に滅却して他者に尽くす、聖人のような精神性です。敵対する者さえも愛そうとしますが、その無制限の受容は、悪意ある者につけ込まれ、組織や社会を内部から崩壊させる隙にもなり得ます。", color: "#00ff88" },
+        "C+": { title: "超越進化主義 (Singularity)", quote: "「肉体は枷だ。人間であることを辞める時が来た。」", desc: "【適応進転・極】<br>進化のためなら倫理も感情も人間性も躊躇なく捨て去るマッドサイエンティスト的思考です。もはやあなたは人類という種の枠組みを超え、新たな知的生命体へと変貌しようとしています。", color: "#0066ff" },
+        "D+": { title: "全一集合主義 (The One)", quote: "「個は幻影に過ぎない。我々は一つに溶け合うのだ。」", desc: "【無差総質・極】<br>個人の自我を完全に否定し、全体意識との融合を渇望しています。あなたにとって孤独とは死以上の恐怖であり、全ての境界線が消滅した海のような意識状態こそが至高の幸福です。", color: "#888888" },
 
         // --- Minus Types (Moderate) ---
-        "A-": { title: "[A-] 秩序維持派 (Order Keeper)", quote: "「自由には責任が伴う。最低限のルールは必要だ。」", desc: "【回帰淘汰・穏】<br>カオスを嫌いますが、過度な排除は行いません。社会システムの安定と継続性を重視する、現実的な保守派です。変化には慎重ですが、それは守るべきものがあるという責任感の表れです。", color: "#ff6b81" },
-        "B-": { title: "[B-] 現状肯定派 (Status Quo)", quote: "「無理に変える必要はない。今のままで十分幸せだ。」", desc: "【共命包摂・穏】<br>急激な改革や争いを避け、今の日常を大切にしたいと願っています。消極的ですが、最も平和的な隣人です。大きな理想よりも、手の届く範囲の平穏を守ることを選びます。", color: "#7bed9f" },
-        "C-": { title: "[C-] 合理改善派 (Pragmatist)", quote: "「より良くできるなら、道具を使わない手はない。」", desc: "【適応進転・穏】<br>テクノロジーや新しい手法を柔軟に取り入れる合理主義者です。人間性を捨てるつもりはありませんが、不便や非効率は我慢なりません。ドライに見えますが、実は最も建設的です。", color: "#70a1ff" },
-        "D-": { title: "[D-] 公平追求派 (Fairness)", quote: "「生まれによる不平等は、できるだけ是正すべきだ。」", desc: "【無差総質・穏】<br>完全な同一化までは求めませんが、チャンスの平等や公正さを重視します。特権階級や理不尽な格差を嫌う、健全な民主的感覚の持ち主です。バランス感覚に優れています。", color: "#ced6e0" },
+        "A-": { title: "秩序維持派 (Order Keeper)", quote: "「自由には責任が伴う。最低限のルールは必要だ。」", desc: "【回帰淘汰・穏】<br>カオスを嫌いますが、過度な排除は行いません。社会システムの安定と継続性を重視する、現実的な保守派です。変化には慎重ですが、それは守るべきものがあるという責任感の表れです。", color: "#ff6b81" },
+        "B-": { title: "現状肯定派 (Status Quo)", quote: "「無理に変える必要はない。今のままで十分幸せだ。」", desc: "【共命包摂・穏】<br>急激な改革や争いを避け、今の日常を大切にしたいと願っています。消極的ですが、最も平和的な隣人です。大きな理想よりも、手の届く範囲の平穏を守ることを選びます。", color: "#7bed9f" },
+        "C-": { title: "合理改善派 (Pragmatist)", quote: "「より良くできるなら、道具を使わない手はない。」", desc: "【適応進転・穏】<br>テクノロジーや新しい手法を柔軟に取り入れる合理主義者です。人間性を捨てるつもりはありませんが、不便や非効率は我慢なりません。ドライに見えますが、実は最も建設的です。", color: "#70a1ff" },
+        "D-": { title: "公平追求派 (Fairness)", quote: "「生まれによる不平等は、できるだけ是正すべきだ。」", desc: "【無差総質・穏】<br>完全な同一化までは求めませんが、チャンスの平等や公正さを重視します。特権階級や理不尽な格差を嫌う、健全な民主的感覚の持ち主です。バランス感覚に優れています。", color: "#ced6e0" },
 
         // --- Hybrid Types (2-way) ---
-        AB: { title: "[AB] 聖域守護主義 (Guardian)", quote: "「この庭の平穏だけは、何としても死守する。」", desc: "【回帰淘汰 × 共命包摂】<br>内側の者には無限の愛を注ぎますが、外敵には容赦ない排他性を発揮します。家族や仲間を守るためなら鬼になれる、閉鎖的な楽園の管理者です。", color: "#eebb44" },
-        AC: { title: "[AC] 完全主義的独裁 (Perfectionist)", quote: "「選ばれた優秀な者が、さらに進化する。」", desc: "【回帰淘汰 × 適応進転】<br>弱者を切り捨て、残った強者をさらに強化しようとするエリート思想。強烈なカリスマ性を持ちますが、弱者にとっては地獄のような世界を作るでしょう。", color: "#a29bfe" },
-        AD: { title: "[AD] 統制全体主義 (Totalitarian)", quote: "「乱れなき行進。例外は許されない。」", desc: "【回帰淘汰 × 無差総質】<br>秩序維持のために、個性を徹底的に排除する管理社会の理想形。すべての市民が同じ規格、同じ思想で動く、美しくも恐ろしい機械仕掛けの世界を望みます。", color: "#ff6b81" },
-        BC: { title: "[BC] 全救済進化主義 (Uplift)", quote: "「誰も置き去りにしない。全員で神になる。」", desc: "【共命包摂 × 適応進転】<br>弱者を切り捨てるのではなく、技術や教育で全員を強者へ引き上げようとする理想家。コストと時間がかかりすぎ、破綻する可能性が高い夢物語でもあります。", color: "#00d2d3" },
-        BD: { title: "[BD] 平和的停滞 (Peace Keeper)", quote: "「みんな違ってみんないい。でも、同じならもっといい。」", desc: "【共命包摂 × 無差総質】<br>争いを極端に恐れる事なかれ主義。多様性を認めつつも、本音では波風の立たない均質な世界を望んでいます。優しいディストピアの住人です。", color: "#55efc4" },
-        CD: { title: "[CD] 集合知性主義 (Hive Mind)", quote: "「個を捨てよ。全となりて永遠を生きよ。」", desc: "【適応進転 × 無差総質】<br>個人の限界を技術で突破し、意識を統合することで進化しようとする思想。SF的な集合精神（ボーグや群体）こそが、人類の最終到達点だと信じています。", color: "#54a0ff" },
+        AB: { title: "聖域守護主義 (Guardian)", quote: "「この庭の平穏だけは、何としても死守する。」", desc: "【回帰淘汰 × 共命包摂】<br>内側の者には無限の愛を注ぎますが、外敵には容赦ない排他性を発揮します。家族や仲間を守るためなら鬼になれる、閉鎖的な楽園の管理者です。", color: "#eebb44" },
+        AC: { title: "完全主義的独裁 (Perfectionist)", quote: "「選ばれた優秀な者が、さらに進化する。」", desc: "【回帰淘汰 × 適応進転】<br>弱者を切り捨て、残った強者をさらに強化しようとするエリート思想。強烈なカリスマ性を持ちますが、弱者にとっては地獄のような世界を作るでしょう。", color: "#a29bfe" },
+        AD: { title: "統制全体主義 (Totalitarian)", quote: "「乱れなき行進。例外は許されない。」", desc: "【回帰淘汰 × 無差総質】<br>秩序維持のために、個性を徹底的に排除する管理社会の理想形。すべての市民が同じ規格、同じ思想で動く、美しくも恐ろしい機械仕掛けの世界を望みます。", color: "#ff6b81" },
+        BC: { title: "全救済進化主義 (Uplift)", quote: "「誰も置き去りにしない。全員で神になる。」", desc: "【共命包摂 × 適応進転】<br>弱者を切り捨てるのではなく、技術や教育で全員を強者へ引き上げようとする理想家。コストと時間がかかりすぎ、破綻する可能性が高い夢物語でもあります。", color: "#00d2d3" },
+        BD: { title: "平和的停滞 (Peace Keeper)", quote: "「みんな違ってみんないい。でも、同じならもっといい。」", desc: "【共命包摂 × 無差総質】<br>争いを極端に恐れる事なかれ主義。多様性を認めつつも、本音では波風の立たない均質な世界を望んでいます。優しいディストピアの住人です。", color: "#55efc4" },
+        CD: { title: "集合知性主義 (Hive Mind)", quote: "「個を捨てよ。全となりて永遠を生きよ。」", desc: "【適応進転 × 無差総質】<br>個人の限界を技術で突破し、意識を統合することで進化しようとする思想。SF的な集合精神（ボーグや群体）こそが、人類の最終到達点だと信じています。", color: "#54a0ff" },
 
         // --- Tri-brid Types (3-way) ---
-        ABC: { title: "[ABC] 超越的統治主義 (Overlord)", quote: "「全能なる父として、世界を導こう。」", desc: "【D(平等)欠落】<br>秩序、慈愛、進化を兼ね備えた理想的な「王」の思想ですが、そこに対等な関係はありません。あなたは民を愛し導きますが、民があなたに意見することは許されないでしょう。", color: "#ffffff" },
-        ABD: { title: "[ABD] 停滞楽園主義 (Lotus Eater)", quote: "「永遠の微睡の中で、痛みだけを忘れて。」", desc: "【C(進化)欠落】<br>秩序と慈愛に満ち、争いのない平等な世界。しかし、そこには成長も変化もありません。飼い慣らされたペットのように、ただ穏やかに死を待つだけの美しい箱庭です。", color: "#88ffcc" },
-        ACD: { title: "[ACD] 機械的収束主義 (The System)", quote: "「感情は不要。最適な解だけを出力せよ。」", desc: "【B(慈愛)欠落】<br>極めて効率的で、秩序立ち、平等な社会。しかし、そこに人の心や不合理な優しさは存在しません。完全無欠なシステムの一部として機能することだけが求められます。", color: "#aaddff" },
-        BCD: { title: "[BCD] 原初混沌主義 (Primordial Soup)", quote: "「全ては混ざり合い、生まれ変わり続ける。」", desc: "【A(規律)欠落】<br>あらゆる命が肯定され、混ざり合い、変化し続ける生命のスープ。そこには境界線も秩序もありません。圧倒的な生命力に満ちていますが、個としての輪郭を保つことは困難でしょう。", color: "#ffaaee" },
+        ABC: { title: "超越的統治主義 (Overlord)", quote: "「全能なる父として、世界を導こう。」", desc: "【D(平等)欠落】<br>秩序、慈愛、進化を兼ね備えた理想的な「王」の思想ですが、そこに対等な関係はありません。あなたは民を愛し導きますが、民があなたに意見することは許されないでしょう。", color: "#ffffff" },
+        ABD: { title: "停滞楽園主義 (Lotus Eater)", quote: "「永遠の微睡の中で、痛みだけを忘れて。」", desc: "【C(進化)欠落】<br>秩序と慈愛に満ち、争いのない平等な世界。しかし、そこには成長も変化もありません。飼い慣らされたペットのように、ただ穏やかに死を待つだけの美しい箱庭です。", color: "#88ffcc" },
+        ACD: { title: "機械的収束主義 (The System)", quote: "「感情は不要。最適な解だけを出力せよ。」", desc: "【B(慈愛)欠落】<br>極めて効率的で、秩序立ち、平等な社会。しかし、そこに人の心や不合理な優しさは存在しません。完全無欠なシステムの一部として機能することだけが求められます。", color: "#aaddff" },
+        BCD: { title: "原初混沌主義 (Primordial Soup)", quote: "「全ては混ざり合い、生まれ変わり続ける。」", desc: "【A(規律)欠落】<br>あらゆる命が肯定され、混ざり合い、変化し続ける生命のスープ。そこには境界線も秩序もありません。圧倒的な生命力に満ちていますが、個としての輪郭を保つことは困難でしょう。", color: "#ffaaee" },
 
-        NEUTRAL: { title: "[NEUTRAL] 中立主義的思考 (The Observer)", quote: "「世界の天秤を眺める観測者」", desc: "どの思想にも理解を示し、同時に距離を置いています。バランサーとして機能しますが、決断を下せず時代の波に流されるだけの存在になる危険性もあります。", color: "#ffffff" }
+        NEUTRAL: { title: "中立主義的思考 (The Observer)", quote: "「世界の天秤を眺める観測者」", desc: "どの思想にも理解を示し、同時に距離を置いています。バランサーとして機能しますが、決断を下せず時代の波に流されるだけの存在になる危険性もあります。", color: "#ffffff" }
     };
 
     // --- State ---
     let activeQuestions = [];
     let currentQIndex = 0;
     let scores = { A: 0, B: 0, C: 0, D: 0 };
+    let maxPossibleScore = { A: 0, B: 0, C: 0, D: 0 };
     let currentMode = 'desktop';
 
     // --- DOM Elements ---
@@ -1056,6 +1063,15 @@
     }
 
     // --- Quiz Logic ---
+    
+    // Opposing Pairs map: A <-> B, C <-> D
+    const opposition = {
+        'A': 'B',
+        'B': 'A',
+        'C': 'D',
+        'D': 'C'
+    };
+
     function startQuiz(count) {
         currentQIndex = 0;
         scores = { A: 0, B: 0, C: 0, D: 0 };
@@ -1071,6 +1087,27 @@
             // Heavy Precision: All 100 questions
             activeQuestions = [...questionPool].sort(() => 0.5 - Math.random());
         }
+
+        // Calculate Max Possible Score for this set
+        // A type question contributes +2 to A (if Agree) OR +2 to B (if Disagree)
+        // Thus, A's max possible is (Qs of type A) * 2 + (Qs of type B) * 2
+        // Wait, NO. If a user answers ALL 'A' questions strongly agree, they get max A score from A questions.
+        // If they answer ALL 'B' questions strongly disagree, they get max A score from B questions.
+        // So Max Score for A = (Count(A) + Count(Opposition(A))) * 2
+        
+        maxPossibleScore = { A: 0, B: 0, C: 0, D: 0 };
+        
+        // First count question types
+        let typeCounts = { A: 0, B: 0, C: 0, D: 0 };
+        activeQuestions.forEach(q => {
+            if(typeCounts[q.type] !== undefined) typeCounts[q.type]++;
+        });
+
+        // Then calc max possible
+        maxPossibleScore.A = (typeCounts.A + typeCounts.B) * 2;
+        maxPossibleScore.B = (typeCounts.B + typeCounts.A) * 2;
+        maxPossibleScore.C = (typeCounts.C + typeCounts.D) * 2;
+        maxPossibleScore.D = (typeCounts.D + typeCounts.C) * 2;
 
         document.getElementById('total-q').innerText = activeQuestions.length;
         switchScreen(introScreen, quizScreen);
@@ -1095,7 +1132,20 @@
         if (currentQIndex >= activeQuestions.length) return;
 
         const q = activeQuestions[currentQIndex];
-        scores[q.type] += value; // Simple addition
+        
+        // NEW LOGIC:
+        // Value 2 (Strongly Agree) -> +2 to q.type
+        // Value 1 (Agree) -> +1 to q.type
+        // Value 0 (Neutral) -> 0
+        // Value -1 (Disagree) -> +1 to opposition[q.type]
+        // Value -2 (Strongly Disagree) -> +2 to opposition[q.type]
+
+        if (value > 0) {
+            scores[q.type] += value;
+        } else if (value < 0) {
+            const oppType = opposition[q.type];
+            scores[oppType] += Math.abs(value);
+        }
 
         currentQIndex++;
         if (currentQIndex < activeQuestions.length) {
@@ -1108,17 +1158,15 @@
     function showResult() {
         document.getElementById('progress-fill').style.width = '100%';
 
-        // Chart Data Calculation (Normalize for display)
-        // Adjusted offset to 10 to make differences more visible and percentages more meaningful
+        // Chart Data Calculation (Raw scores are now always positive or zero)
         let chartData = {
-            A: Math.max(0, scores.A + 10),
-            B: Math.max(0, scores.B + 10),
-            C: Math.max(0, scores.C + 10),
-            D: Math.max(0, scores.D + 10)
+            A: scores.A,
+            B: scores.B,
+            C: scores.C,
+            D: scores.D
         };
         const total = Object.values(chartData).reduce((a, b) => a + b, 0) || 1;
         
-        // Calculate Percentages for Display
         const pA = (chartData.A / total) * 100;
         const pB = (chartData.B / total) * 100;
         const pC = (chartData.C / total) * 100;
@@ -1131,7 +1179,7 @@
         const s2 = scores[sorted[1]];
         const s3 = scores[sorted[2]];
         
-        // Standard Deviation for Neutral
+        // Standard Deviation
         const values = Object.values(scores);
         const mean = values.reduce((a, b) => a + b) / 4;
         const variance = values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / 4;
@@ -1140,44 +1188,50 @@
         let resultKey = sorted[0];
 
         // --- Decision Tree ---
-        const questionCount = activeQuestions.length;
-        const neutralThreshold = questionCount * 0.1;
-        const hybridThreshold = questionCount * 0.15;
+        // Thresholds based on RAW SCORE differences, roughly relative to total possible questions
+        // Let's use a percentage of total actual points scored? Or max possible?
+        // Max possible for one type is roughly QuestionCount (if perfect split A/B).
+        // Let's stick to a robust simple logic.
+        
+        // Neutral Threshold: SD is small.
+        // e.g. If scores are 25, 24, 26, 25 -> SD is small.
+        // Threshold = Total Score * 0.05 ? No.
+        // Let's try constant relative to Q count. 50 questions -> max score ~50-60.
+        const qCount = activeQuestions.length;
+        const neutralSDThreshold = qCount * 0.15; // 100Q -> SD < 15
 
-        if (sd < neutralThreshold) { 
-            // 1. Score deviation is very low -> NEUTRAL
+        // Hybrid Threshold: Difference between Top1 and Top2
+        const hybridDiff = qCount * 0.2; // 100Q -> 20 points diff
+
+        if (sd < neutralSDThreshold) { 
             resultKey = "NEUTRAL";
         } else {
             const diff1_2 = s1 - s2;
             const diff1_3 = s1 - s3;
 
-            if (diff1_3 <= hybridThreshold) {
-                // 2. Top 3 are close -> Tri-brid
+            if (diff1_3 <= hybridDiff) {
+                // Top 3 are close -> Tri-brid
                 let top3 = [sorted[0], sorted[1], sorted[2]].sort();
                 let triKey = top3.join("");
                 if (resultsData[triKey]) resultKey = triKey;
-            } else if (diff1_2 <= hybridThreshold) {
-                // 3. Top 2 are close -> Hybrid
+            } else if (diff1_2 <= hybridDiff) {
+                // Top 2 are close -> Hybrid
                 let top2 = [sorted[0], sorted[1]].sort();
                 let biKey = top2.join("");
                 if (resultsData[biKey]) resultKey = biKey;
             } else {
-                // 4. Single Winner -> Check Intensity based on Percentage
-                // User requirement: >= 40% is Fanatic (+), < 40% is Moderate (-)
+                // Single Winner -> Check Intensity (+ or -)
+                // Threshold: 40% of Theoretical Max Score for that type
+                const winnerType = sorted[0];
+                const maxScore = maxPossibleScore[winnerType];
                 
-                // Get the percentage of the winner
-                let winnerKey = sorted[0];
-                let winnerPercentage = 0;
+                // If maxScore is 0 (shouldn't happen), avoid NaN
+                const ratio = maxScore > 0 ? (s1 / maxScore) : 0;
                 
-                if (winnerKey === 'A') winnerPercentage = pA;
-                else if (winnerKey === 'B') winnerPercentage = pB;
-                else if (winnerKey === 'C') winnerPercentage = pC;
-                else if (winnerKey === 'D') winnerPercentage = pD;
-
-                if (winnerPercentage >= 40) {
-                    resultKey = sorted[0] + "+";
+                if (ratio >= 0.4) {
+                    resultKey = winnerType + "+";
                 } else {
-                    resultKey = sorted[0] + "-";
+                    resultKey = winnerType + "-";
                 }
             }
         }
@@ -1204,12 +1258,12 @@
             }
         });
 
-        // Update Legend with Percentages
+        // Update Legend with RAW SCORES
         document.getElementById('result-legend').innerHTML = `
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰 (A): ${Math.round(pA)}%</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂 (B): ${Math.round(pB)}%</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転 (C): ${Math.round(pC)}%</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質 (D): ${Math.round(pD)}%</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰 (A): Score ${scores.A}</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂 (B): Score ${scores.B}</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転 (C): Score ${scores.C}</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質 (D): Score ${scores.D}</div>
         `;
 
         // DOM Updates
@@ -1235,9 +1289,9 @@
         const title = document.getElementById('result-title').innerText;
         const quote = document.getElementById('result-quote').innerText;
         
-        const text = `【Mtps思想診断】\n診断結果: ${title}\n${quote}\n\nあなたの思想を解析します。`;
-        const hashtags = "Mtps思想診断";
-        const url = "https://unknownthedeltia.github.io/mip";
+        const text = `【思想診断システム V11】\n診断結果: ${title}\n${quote}\n\nあなたの思想を解析します。`;
+        const hashtags = "IdeologyProfiler,思想診断";
+        const url = "https://unknownthedeltia.github.io/sample";
 
         const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${hashtags}&url=${encodeURIComponent(url)}`;
         
