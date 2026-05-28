@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mtps思想診断ツール</title>
+    <title>Mtps思想診断</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,6 +31,18 @@
             --container-width: 900px;
             --btn-height: 60px;
             --font-scale: 1;
+        }
+
+
+        body.theme-light {
+            --color-bg: #f4f7fb;
+            --color-text: #1f2937;
+            --color-accent: #00796f;
+            --color-dim: #64748b;
+            --color-a: #d7263d;
+            --color-b: #0f9f68;
+            --color-c: #1565c0;
+            --color-d: #54616f;
         }
 
         * {
@@ -200,6 +212,25 @@
             border-color: var(--color-accent);
             background: rgba(100, 255, 218, 0.1);
         }
+
+        .mode-btn.danger {
+            border-color: rgba(255, 71, 87, 0.75);
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.16), rgba(0,0,0,0.35));
+            box-shadow: inset 0 0 18px rgba(255, 71, 87, 0.08), 0 0 18px rgba(255, 71, 87, 0.08);
+        }
+        .mode-btn.danger:hover {
+            border-color: var(--color-a);
+            background: rgba(255, 71, 87, 0.18);
+            box-shadow: 0 0 26px rgba(255, 71, 87, 0.25);
+        }
+        .mode-btn.danger .mode-info h3,
+        .mode-btn.danger .danger-mark {
+            color: var(--color-a);
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.35);
+        }
+        .mode-btn.danger .time-est {
+            color: #ff9aa4;
+        }
         .mode-info h3 {
             font-family: var(--font-mono);
             color: var(--color-accent);
@@ -225,6 +256,337 @@
             background: #1DA1F2;
             color: #ffffff;
             box-shadow: 0 0 20px rgba(29, 161, 242, 0.4);
+        }
+
+        .btn-hashtag {
+            border-color: #ff4f8b;
+            color: #ff4f8b;
+        }
+        .btn-hashtag:hover {
+            background: #ff4f8b;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 79, 139, 0.4);
+        }
+
+        .menu-action-box {
+            width: 100%;
+            margin-top: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 0.8rem;
+        }
+
+        .menu-button-row {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .menu-sub-button-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-database,
+        .btn-notice,
+        .btn-credit,
+        .btn-history {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            margin: 0.25rem;
+            font-family: var(--font-mono);
+        }
+
+        .btn-database {
+            min-width: 280px;
+            padding: 0.85rem 2.4rem;
+            font-size: 1.05rem;
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.08);
+            box-shadow: 0 0 18px rgba(100, 255, 218, 0.12), inset 0 0 18px rgba(100, 255, 218, 0.04);
+        }
+        .btn-database:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 26px rgba(100, 255, 218, 0.45);
+            transform: translateY(-1px);
+        }
+
+        .btn-notice,
+        .btn-credit,
+        .btn-history {
+            min-width: 135px;
+            font-size: 0.85rem;
+            padding: 0.45rem 1.2rem;
+            opacity: 0.95;
+        }
+
+        .btn-history {
+            border-color: #ffd166;
+            color: #ffd166;
+        }
+        .btn-history:hover {
+            background: #ffd166;
+            color: #111827;
+            box-shadow: 0 0 20px rgba(255, 209, 102, 0.35);
+        }
+
+        .btn-notice {
+            border-color: var(--color-a);
+            color: var(--color-a);
+        }
+        .btn-notice:hover {
+            background: var(--color-a);
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.35);
+        }
+
+        .btn-credit {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+        }
+        .btn-credit:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 20px rgba(100, 255, 218, 0.35);
+        }
+
+
+        .btn-theme {
+            min-width: 150px;
+            font-size: 0.85rem;
+            padding: 0.45rem 1.2rem;
+            border-color: #f7c948;
+            color: #f7c948;
+        }
+        .btn-theme:hover {
+            background: #f7c948;
+            color: #101820;
+            box-shadow: 0 0 20px rgba(247, 201, 72, 0.35);
+        }
+
+        body.theme-light .scanline {
+            background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0) 50%, rgba(0,0,0,0.025) 50%, rgba(0,0,0,0.025));
+            background-size: 100% 4px;
+        }
+        body.theme-light .container {
+            background: rgba(255, 255, 255, 0.82);
+            border-color: rgba(30, 41, 59, 0.14);
+            box-shadow: 0 20px 60px rgba(30, 55, 80, 0.16);
+        }
+        body.theme-light h1 {
+            text-shadow: 0 0 10px rgba(0, 121, 111, 0.18);
+        }
+        body.theme-light .mode-btn,
+        body.theme-light .device-card,
+        body.theme-light .option-btn,
+        body.theme-light .result-text-area,
+        body.theme-light .db-card,
+        body.theme-light .credit-row {
+            background: rgba(255, 255, 255, 0.72);
+            border-color: rgba(30, 41, 59, 0.16);
+        }
+        body.theme-light .mode-btn:hover,
+        body.theme-light .device-card:hover,
+        body.theme-light .option-btn:hover,
+        body.theme-light .db-card:hover {
+            background: rgba(0, 121, 111, 0.08);
+            border-color: var(--color-accent);
+        }
+        body.theme-light .mode-info p,
+        body.theme-light .db-short-desc,
+        body.theme-light .author-link-box,
+        body.theme-light .credit-role {
+            color: #64748b;
+        }
+        body.theme-light .progress-bar-bg {
+            background: #d9e2ec;
+        }
+        body.theme-light .chart-overlay {
+            background: #ffffff;
+            border: 1px solid rgba(30, 41, 59, 0.12);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.65);
+        }
+        #result-code {
+            text-shadow: 0 2px 10px rgba(0,0,0,0.45);
+        }
+        #result-title {
+            text-shadow: 0 1px 8px rgba(0,0,0,0.25);
+        }
+        body.theme-light #result-code,
+        body.theme-light #result-title {
+            text-shadow: none;
+        }
+        body.theme-light .chart-overlay span:first-child {
+            color: #475569 !important;
+        }
+        body.theme-light .credit-box {
+            background: rgba(255,255,255,0.78);
+            border-color: rgba(0, 121, 111, 0.45);
+        }
+        body.theme-light .warning-box {
+            background: rgba(215, 38, 61, 0.07);
+        }
+        body.theme-light .btn-database {
+            background: rgba(0, 121, 111, 0.08);
+            box-shadow: 0 0 18px rgba(0, 121, 111, 0.10), inset 0 0 18px rgba(0, 121, 111, 0.04);
+        }
+        body.theme-light .mode-btn.danger {
+            background: linear-gradient(90deg, rgba(215, 38, 61, 0.12), rgba(255,255,255,0.72));
+        }
+        body.theme-light .result-text-area {
+            border-left-color: rgba(30, 41, 59, 0.35);
+        }
+        body.theme-light ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        body.theme-light ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+        }
+
+        /* Light mode: make DATABASE text readable on bright backgrounds */
+        body.theme-light .db-container {
+            background: linear-gradient(180deg, rgba(0, 121, 111, 0.055), rgba(255, 255, 255, 0.72));
+        }
+        body.theme-light .db-section {
+            border-bottom-color: rgba(15, 23, 42, 0.16);
+        }
+        body.theme-light .db-h2 {
+            color: #0f172a;
+            background: rgba(0, 121, 111, 0.10);
+            text-shadow: none;
+        }
+        body.theme-light .db-card h3,
+        body.theme-light .db-card h4 {
+            color: #0f172a;
+        }
+        body.theme-light .db-card p,
+        body.theme-light .db-card strong,
+        body.theme-light .db-details {
+            color: #1f2937;
+        }
+        body.theme-light .db-short-desc {
+            color: #475569;
+        }
+        body.theme-light .db-card.active .db-details {
+            border-top-color: rgba(15, 23, 42, 0.16);
+        }
+        body.theme-light .db-detail-quote {
+            color: #475569 !important;
+            border-bottom-color: rgba(15, 23, 42, 0.18) !important;
+        }
+        body.theme-light .db-detail-desc {
+            color: #1f2937 !important;
+        }
+        .db-group-title {
+            margin: 1.5rem 0 1rem;
+            color: var(--color-text);
+            border-bottom: 1px solid rgba(255,255,255,0.18);
+            padding-bottom: 0.5rem;
+        }
+        body.theme-light .db-group-title {
+            color: #0f172a;
+            border-bottom-color: rgba(15, 23, 42, 0.18);
+        }
+        body.theme-light .logic-detail-box {
+            background: rgba(0, 121, 111, 0.08);
+            border-color: rgba(0, 121, 111, 0.28);
+        }
+        body.theme-light .logic-detail-box li {
+            color: #334155;
+        }
+        body.theme-light .logic-note {
+            color: #475569;
+            border-top-color: rgba(15, 23, 42, 0.16);
+        }
+
+        .author-link-box {
+            width: 100%;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: var(--color-dim);
+            font-family: var(--font-mono);
+            letter-spacing: 0.08em;
+            text-align: center;
+        }
+        .author-link-box a {
+            color: var(--color-accent);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.35);
+            transition: 0.3s;
+        }
+        .author-link-box a:hover {
+            color: #ffffff;
+            border-bottom-color: #ffffff;
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.45);
+        }
+
+        .credit-box {
+            background: rgba(100, 255, 218, 0.04);
+            border: 1px solid rgba(100, 255, 218, 0.55);
+            padding: 2rem;
+            max-width: 720px;
+            width: 100%;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        .credit-box h3 {
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.25);
+            padding-bottom: 0.5rem;
+            letter-spacing: 0.08em;
+        }
+        .credit-list {
+            display: grid;
+            gap: 1rem;
+        }
+        .credit-row {
+            display: grid;
+            grid-template-columns: minmax(180px, 0.8fr) 1.2fr;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.03);
+            border-left: 3px solid var(--color-accent);
+        }
+        .credit-role {
+            color: var(--color-dim);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .credit-name {
+            color: var(--color-text);
+            font-weight: 700;
+            line-height: 1.6;
+        }
+        .credit-name a {
+            color: var(--color-accent);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.35);
+        }
+        .credit-name a:hover {
+            color: #ffffff;
+            border-bottom-color: #ffffff;
+        }
+        body.mode-mobile .credit-row {
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
         }
 
         /* --- Warning Screen Styles --- */
@@ -460,6 +822,128 @@
         .legend-item { display: flex; align-items: center; gap: 4px; }
         .legend-color { width: 8px; height: 8px; border-radius: 50%; }
 
+        /* --- History Screen Styles --- */
+        .history-box {
+            width: 100%;
+            max-width: 900px;
+            height: 100%;
+            overflow-y: auto;
+            padding: 1rem;
+            text-align: left;
+        }
+
+        .history-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .history-actions {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
+        .history-list {
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .history-card {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-left: 4px solid var(--color-accent);
+            padding: 1.2rem;
+        }
+
+        .history-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.9rem;
+        }
+
+        .history-result-code {
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+
+        .history-result-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-top: 0.2rem;
+            line-height: 1.5;
+        }
+
+        .history-date {
+            color: var(--color-dim);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            text-align: right;
+            line-height: 1.5;
+        }
+
+        .history-course {
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            margin-bottom: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .history-score-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+
+        body.mode-mobile .history-score-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .history-score-item {
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.07);
+            padding: 0.7rem;
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+        }
+
+        .history-score-item strong {
+            display: block;
+            font-size: 1rem;
+            margin-top: 0.25rem;
+            color: var(--color-text);
+        }
+
+        .history-empty {
+            text-align: center;
+            color: var(--color-dim);
+            border: 1px dashed rgba(255,255,255,0.18);
+            padding: 2rem;
+            line-height: 1.8;
+        }
+
+        body.theme-light .history-card {
+            background: rgba(255,255,255,0.82);
+            border-color: rgba(15,23,42,0.14);
+        }
+        body.theme-light .history-score-item {
+            background: rgba(15,23,42,0.04);
+            border-color: rgba(15,23,42,0.12);
+        }
+        body.theme-light .history-empty {
+            border-color: rgba(15,23,42,0.18);
+        }
+
         /* --- Database Screen Styles --- */
         .db-container {
             width: 100%;
@@ -467,36 +951,44 @@
             overflow-y: auto;
             padding: 1rem;
             text-align: left;
+            background: linear-gradient(180deg, rgba(100, 255, 218, 0.025), rgba(255, 255, 255, 0.01));
+            border-radius: 0.6rem;
         }
         
         .db-section {
             margin-bottom: 3rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(100, 255, 218, 0.18);
             padding-bottom: 2rem;
         }
         
         .db-h2 {
             font-family: var(--font-mono);
-            color: var(--color-accent);
+            color: #f5fffc;
             font-size: 1.5rem;
             margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            padding: 0.65rem 0.9rem;
+            border-left: 4px solid var(--color-accent);
+            background: rgba(100, 255, 218, 0.08);
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.22);
         }
 
         .db-card {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.065);
+            border: 1px solid rgba(255,255,255,0.14);
             padding: 1.5rem;
             margin-bottom: 1rem;
-            border-left: 3px solid #555;
+            border-left: 4px solid #777;
             cursor: pointer;
             transition: all 0.3s ease;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.18);
         }
         
         .db-card:hover {
-            background: rgba(255,255,255,0.07);
+            background: rgba(100, 255, 218, 0.09);
+            border-color: rgba(100, 255, 218, 0.35);
             transform: translateX(5px);
         }
         
@@ -506,17 +998,21 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            color: #f5f7fa;
         }
 
         .db-card h4 {
             font-size: 1.1rem;
             margin-bottom: 0.3rem;
+            color: #f5f7fa;
         }
 
         .db-short-desc {
-            font-size: 0.8rem; 
-            color: #888;
+            font-size: 0.82rem; 
+            color: #cbd5e1;
             display: block;
+            margin-top: 0.35rem;
+            line-height: 1.6;
         }
 
         .db-details {
@@ -541,6 +1037,53 @@
             gap: 1rem;
         }
 
+
+        .logic-detail-box {
+            margin-top: 1.2rem;
+            margin-bottom: 1.2rem;
+            padding: 1.2rem;
+            background: rgba(100, 255, 218, 0.055);
+            border: 1px solid rgba(100, 255, 218, 0.25);
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .logic-detail-box h3 {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 1rem;
+            margin-bottom: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        .logic-detail-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .logic-detail-box li {
+            margin-bottom: 0.65rem;
+            padding-left: 1.1rem;
+            position: relative;
+            color: #d8e2ea;
+        }
+
+        .logic-detail-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+        }
+
+        .logic-note {
+            margin-top: 0.9rem;
+            padding-top: 0.8rem;
+            border-top: 1px solid rgba(255,255,255,0.12);
+            color: #b9c7d2;
+            font-size: 0.85rem;
+        }
+
         /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 8px;
@@ -558,7 +1101,7 @@
 
     </style>
 </head>
-<body class="mode-desktop">
+<body class="mode-desktop theme-dark">
 
     <div class="scanline"></div>
 
@@ -583,8 +1126,82 @@
             </div>
         </div>
 
-        <!-- Screen 0.5: Warning -->
+        <!-- Screen 0.5: Course Warning / MAX PRECISION only -->
         <div id="warning-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-a); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);">MAX WARNING</h1>
+            <div class="warning-box">
+                <h3>最精密思想診断 / 200 QUESTION NOTICE</h3>
+                <ul>
+                    <li>このコースは200問すべてに回答する最長モードです。目安時間は30〜60分です。</li>
+                    <li>A/B/C/Dを各50問に揃えた全問バランス補正により、最も精密に判定します。</li>
+                    <li>質問には強い表現や極端な価値観を扱うものがあります。診断結果は絶対的な評価ではなく、エンターテインメントとして扱ってください。</li>
+                    <li>長時間になるため、疲れた場合は無理に続けず休憩してください。</li>
+                    <li>この診断を途中で退出した場合の記録は保存されません。</li>
+                </ul>
+            </div>
+            <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+                <button class="btn" onclick="hideCourseWarning()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK</button>
+                <button class="btn" onclick="confirmCourseWarning()" style="border-color: var(--color-a); color: var(--color-a);">AGREE & START</button>
+            </div>
+        </div>
+
+        <!-- Screen 1: Intro (Mode Selection) -->
+        <div id="intro-screen" class="screen">
+            <h1>IDEOLOGY PROFILER v1.2.0</h1>
+            <p class="subtitle">
+                診断モードを選択してください。
+            </p>
+            
+            <div class="mode-select-grid">
+                <div class="mode-btn" onclick="startQuiz(25)">
+                    <div class="mode-info">
+                        <h3>STANDARD</h3>
+                        <p>一般思想診断 / 25問 / 固定バランス抽出</p>
+                        <p class="time-est">目安時間: 3~8分</p>
+                    </div>
+                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                </div>
+                <div class="mode-btn" onclick="startQuiz(50)">
+                    <div class="mode-info">
+                        <h3>LIGHT PRECISION</h3>
+                        <p>軽精密思想診断 / 50問 / 固定バランス抽出</p>
+                        <p class="time-est">目安時間: 8~15分</p>
+                    </div>
+                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                </div>
+                <div class="mode-btn" onclick="startQuiz(100)">
+                    <div class="mode-info">
+                        <h3>HEAVY PRECISION</h3>
+                        <p>重精密思想診断 / 100問 / 固定バランス抽出</p>
+                        <p class="time-est">目安時間: 15~30分</p>
+                    </div>
+                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                </div>
+                <div class="mode-btn danger" onclick="showCourseWarning(200)">
+                    <div class="mode-info">
+                        <h3>MAX PRECISION</h3>
+                        <p>最精密思想診断 / 200問 / 全問バランス補正</p>
+                        <p class="time-est">目安時間: 30~60分</p>
+                    </div>
+                    <span class="danger-mark" style="font-family: var(--font-mono);">!!</span>
+                </div>
+            </div>
+
+            <div class="menu-action-box">
+                <div class="menu-button-row">
+                    <button class="btn btn-database" onclick="showDatabase()">DATABASE</button>
+                    <div class="menu-sub-button-row">
+                        <button class="btn btn-notice" onclick="showMainNotice()">NOTICE</button>
+                        <button class="btn btn-credit" onclick="showCredit()">CREDIT</button>
+                        <button class="btn btn-history" onclick="showHistory()">HISTORY</button>
+                        <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()">LIGHT MODE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 1.2: Main Notice -->
+        <div id="notice-screen" class="screen">
             <h1 style="font-family: var(--font-mono); color: var(--color-a); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);">WARNING</h1>
             <div class="warning-box">
                 <h3>注意事項 / NOTICE</h3>
@@ -594,49 +1211,48 @@
                     <li>
                         バグ報告・お問い合わせは下記までお願いします。<br>
                         Email: unknownthedelta@gmail.com<br>
-                        X: <a href="https://twitter.com/Metalepsis_jp" target="_blank" style="color:var(--color-accent); text-decoration:none;">@Metalepsis_jp</a>
+                        X: <a href="https://twitter.com/Metalepsis_jp" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent); text-decoration:none;">@Metalepsis_jp</a>
                     </li>
                 </ul>
             </div>
-            <button class="btn" onclick="goToIntro()" style="border-color: var(--color-a); color: var(--color-a);">AGREE & PROCEED</button>
+            <button class="btn" onclick="hideMainNotice()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
         </div>
 
-        <!-- Screen 1: Intro (Mode Selection) -->
-        <div id="intro-screen" class="screen">
-            <h1>IDEOLOGY PROFILER v1.1.1</h1>
-            <p class="subtitle">
-                診断モードを選択してください。
-            </p>
-            
-            <div class="mode-select-grid">
-                <div class="mode-btn" onclick="startQuiz(25)">
-                    <div class="mode-info">
-                        <h3>STANDARD</h3>
-                        <p>一般思想診断 / 25問 / 簡易分析</p>
-                        <p class="time-est">目安時間: 3~8分</p>
+        <!-- Screen 1.3: Credit -->
+        <div id="credit-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-accent); text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);">CREDIT</h1>
+            <div class="credit-box">
+                <h3>制作クレジット / CREDIT</h3>
+                <div class="credit-list">
+                    <div class="credit-row">
+                        <div class="credit-role">Author</div>
+                        <div class="credit-name"><a href="https://x.com/Metalepsis_" target="_blank" rel="noopener noreferrer">Metalepsis_</a></div>
                     </div>
-                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
-                </div>
-                <div class="mode-btn" onclick="startQuiz(50)">
-                    <div class="mode-info">
-                        <h3>LIGHT PRECISION</h3>
-                        <p>軽精密思想診断 / 50問 / 詳細分析</p>
-                        <p class="time-est">目安時間: 8~15分</p>
+                    <div class="credit-row">
+                        <div class="credit-role">Problem statement production</div>
+                        <div class="credit-name">Metalepsis_</div>
                     </div>
-                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
-                </div>
-                <div class="mode-btn" onclick="startQuiz(100)">
-                    <div class="mode-info">
-                        <h3>HEAVY PRECISION</h3>
-                        <p>重精密思想診断 / 100問 / 徹底解析</p>
-                        <p class="time-est">目安時間: 15~30分</p>
+                    <div class="credit-row">
+                        <div class="credit-role">Production support</div>
+                        <div class="credit-name">Gemini、ChatGPT</div>
                     </div>
-                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
                 </div>
             </div>
+            <button class="btn" onclick="hideCredit()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+        </div>
 
-            <div style="margin-top: 2rem;">
-                <button class="btn" onclick="showDatabase()" style="font-size: 0.9rem; padding: 0.5rem 1.5rem; border-color: var(--color-dim); color: var(--color-dim);">DATABASE</button>
+        <!-- Screen 1.4: History -->
+        <div id="history-screen" class="screen">
+            <div class="history-box">
+                <div class="history-header">
+                    <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">HISTORY</h1>
+                    <p style="color: #888; font-size: 0.9rem; line-height:1.7;">ローカルに保存された診断結果履歴</p>
+                </div>
+                <div class="history-actions">
+                    <button class="btn" onclick="hideHistory()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+                    <button class="btn" onclick="clearHistory()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-a); color: var(--color-a);">CLEAR HISTORY</button>
+                </div>
+                <div id="history-list" class="history-list"></div>
             </div>
         </div>
 
@@ -692,9 +1308,26 @@
                     <h2 class="db-h2">2. 判定ロジック</h2>
                     <div style="font-size: 0.9rem; line-height: 1.8;">
                         <p><strong>採点方式:</strong> 全て加点方式です。「そう思わない」と回答した場合、対立する思想（A⇔B, C⇔D）に加点されます。</p>
-                        <p><strong>1. 中立判定 (Neutral):</strong> スコアのばらつきが極端に小さい場合、「観測者」と判定されます。</p>
-                        <p><strong>2. 複合判定 (Hybrid/Tri-brid):</strong> 上位スコアの差が僅差（15%以内）の場合、複数の思想を併せ持つと判定されます。</p>
-                        <p><strong>3. 単独判定 (+/-):</strong> 1つの思想が突出している場合。獲得スコアが<strong>理論上の満点の40%以上</strong>なら「熱狂（+）」、未満なら「穏健（-）」と判定されます。</p>
+                        <p><strong>表示スコア:</strong> 結果画面のA/B/C/D%は、各思想の理論上満点に対する達成率です。問題数が違うコースでも比較しやすいよう、0〜100%で表示します。</p>
+                        <p><strong>STANDARD:</strong> 25問の素点をそのまま比較します。中立・複合判定は広めで、直感的な傾向を出します。</p>
+                        <p><strong>LIGHT PRECISION:</strong> 50問の結果を各思想の理論上満点に対する割合へ補正して比較します。問題タイプの偏りに強く、細かい差を拾います。</p>
+                        <p><strong>HEAVY PRECISION:</strong> 100問の割合補正に加えて、対立軸（A⇔B, C⇔D）でどれだけ優勢かを評価します。矛盾回答の影響を抑え、より厳密に判定します。</p>
+                        <p><strong>MAX PRECISION:</strong> 200問すべてを使用し、A/B/C/Dを各50問に揃えた全問バランス補正で判定します。最も時間がかかる代わりに、ブレを最小化した最精密モードです。</p>
+                        <p><strong>100問/200問の内部評価:</strong> 表示スコアだけでなく、対立軸の優勢度も加味します。内部評価は「表示スコア×0.65 + 対立思想との差分×0.35」で計算します。例：A内部値 = A%×0.65 + max(0, A%−B%)×0.35。</p>
+                        <p><strong>精密限定判定:</strong> 50問以上では、中立連打の「∅」、高均衡の「N+」、低反応均衡の「N-」、極限単独の「++」、1思想だけ低い「!」、高密度複合の「#」を既存判定より先に評価します。</p>
+                        <div class="logic-detail-box">
+                            <h3>精密限定判定の数値条件 / 50問以上限定</h3>
+                            <ul>
+                                <li><strong>∅ 空白応答型:</strong> 中立回答率が72%以上。または、中立回答率62%以上かつ有効回答率38%以下。</li>
+                                <li><strong>N+ 完全均衡観測者:</strong> A/B/C/Dの標準偏差が4.2以下、平均スコア42%以上、中立回答率35%以下。</li>
+                                <li><strong>N- 低反応中立者:</strong> A/B/C/Dの標準偏差が5.0以下、かつ平均スコア28%以下。または中立回答率48%以上。</li>
+                                <li><strong>A++ / B++ / C++ / D++:</strong> トップ思想72%以上、対立思想12%以下、トップと2位の差18%以上。</li>
+                                <li><strong>!A / !B / !C / !D:</strong> 最下位思想15%以下、残り3思想の平均34%以上、3位と最下位の差12%以上。</li>
+                                <li><strong>AB# / AC# / AD# / BC# / BD# / CD#:</strong> 1位42%以上、2位42%以上、1位と2位の差6%以下、2位と3位の差7%以上。</li>
+                            </ul>
+                            <p class="logic-note">判定優先順位は「∅ → N+/N- → ++ → ! → # → 既存判定」です。先に条件を満たした結果が優先されます。</p>
+                        </div>
+                        <p><strong>単独判定 (+/-):</strong> 1つの思想が突出している場合、コースごとの熱狂判定ラインを超えると「+」、未満なら「-」になります。</p>
                     </div>
                 </div>
 
@@ -710,6 +1343,9 @@
 
                 <div style="text-align: center; margin-top: 2rem;">
                     <button class="btn" onclick="hideDatabase()">BACK TO MENU</button>
+                    <div class="author-link-box">
+                        AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -775,6 +1411,7 @@
 
                 <!-- Text Area -->
                 <div class="result-text-area" id="result-card">
+                    <div id="result-course" style="font-family:var(--font-mono); font-size:0.85rem; color:var(--color-accent); margin-bottom:0.6rem; letter-spacing:0.08em;">COURSE: --</div>
                     <div id="result-title" style="font-size: 1.4rem; font-weight: bold; margin-bottom: 0.5rem;">分析中...</div>
                     <div id="result-quote" style="font-style: italic; color: #888; margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">...</div>
                     <div id="result-desc" style="font-size: 0.95rem; line-height: 1.8;">...</div>
@@ -782,6 +1419,11 @@
                     <div style="margin-top: 2rem; text-align: center; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
                         <button class="btn" onclick="restartQuiz()" style="padding: 0.5rem 2rem; font-size: 1rem;">RESET</button>
                         <button class="btn btn-share" onclick="shareOnTwitter()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE (X)</button>
+                        <button class="btn btn-hashtag" onclick="openHashtagResults()" style="padding: 0.5rem 2rem; font-size: 1rem;">他の人の結果を見る</button>
+                        <button class="btn btn-history" onclick="renderHistory(); switchScreen(resultScreen, historyScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">HISTORY</button>
+                    </div>
+                    <div class="author-link-box">
+                        AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
                     </div>
                 </div>
             </div>
@@ -789,7 +1431,7 @@
     </div>
 
 <script>
-    // --- Question Pool (100 Questions) ---
+    // --- Question Pool (200 Questions) ---
     const questionPool = [
         // Original 25
         { t: "生まれ持った資質や才能の差は、その人の運命や役割を決定づける重要な要素である。", type: "A", s: "価値" },
@@ -897,7 +1539,113 @@
         { t: "突出した杭は打たれるべきであり、平らな地平線こそが理想だ。", type: "D", s: "平準" },
         { t: "「私」という主語をなくし、「我々」とだけ言えばいい。", type: "D", s: "主語" },
         { t: "芸術は個人の表現ではなく、社会全体のプロパガンダであるべきだ。", type: "D", s: "公共" },
-        { t: "違いを認めるのではなく、違いそのものを消滅させるのが究極の解決だ。", type: "D", s: "解決" }
+        { t: "違いを認めるのではなく、違いそのものを消滅させるのが究極の解決だ。", type: "D", s: "解決" },
+        // Added 100 Questions for MAX PRECISION (Total 200 / A:50 B:50 C:50 D:50)
+        // A +24
+        { t: "社会には、時代が変わっても変えてはいけない中心規範が必要だ。", type: "A", s: "規範" },
+        { t: "自由な混合よりも、守られた系譜や型の方が文化を強く保つ。", type: "A", s: "継承" },
+        { t: "ルール違反者への過度な温情は、秩序全体を弱体化させる。", type: "A", s: "規律" },
+        { t: "共同体の品位を保つためには、参加資格や作法を明確にするべきだ。", type: "A", s: "格式" },
+        { t: "伝統的な作法から外れた表現は、まず正しい型へ戻すべきだ。", type: "A", s: "作法" },
+        { t: "外から入る価値観は、すぐ受け入れず、影響を慎重に見極めるべきだ。", type: "A", s: "境界" },
+        { t: "大多数の安全を守るためなら、少数の例外的行動を制限するのは当然だ。", type: "A", s: "安全" },
+        { t: "美しい制度は、全員が同じ手順を守ることで初めて成立する。", type: "A", s: "制度" },
+        { t: "古い慣習には、現代の理屈だけでは測れない価値が宿っている。", type: "A", s: "慣習" },
+        { t: "秩序を壊す自由は、もはや自由ではなくただの無秩序だ。", type: "A", s: "自由" },
+        { t: "正しい文化を守るには、曖昧な寛容より明確な線引きが必要だ。", type: "A", s: "線引き" },
+        { t: "能力や貢献に応じて階層が生まれることは、社会の自然な姿だ。", type: "A", s: "階層" },
+        { t: "公共空間では、個人の好みよりも全体の統一感を優先すべきだ。", type: "A", s: "公共" },
+        { t: "社会の中枢に近づくほど、身元や背景は厳密に確認されるべきだ。", type: "A", s: "審査" },
+        { t: "危険な思想は、広まってから議論するより、早い段階で封じ込める方が健全だ。", type: "A", s: "防疫" },
+        { t: "正統な教育は、全員が同じ古典や基礎から学ぶことで成り立つ。", type: "A", s: "教育" },
+        { t: "多様性の名のもとに伝統の輪郭が薄まることは、社会的な損失だ。", type: "A", s: "伝統" },
+        { t: "混乱期には、長い議論よりも明確な命令系統を優先すべきだ。", type: "A", s: "指揮" },
+        { t: "清潔さや礼節は、単なる外見ではなく内面の質を示す。", type: "A", s: "礼節" },
+        { t: "守るべき中心がない社会は、その時々の流行に簡単に流される。", type: "A", s: "中心" },
+        { t: "不安定な改革より、長く検証されてきた制度の方を信頼したい。", type: "A", s: "検証" },
+        { t: "表現の自由にも、共同体の品位による上限があるべきだ。", type: "A", s: "品位" },
+        { t: "共同体に溶け込めない価値観を、中枢に入れるべきではない。", type: "A", s: "中枢" },
+        { t: "役割が明確な社会は、個人を迷わせず安定させる。", type: "A", s: "役割" },
+        // B +25
+        { t: "制度の完成度より、目の前で困っている人を置き去りにしないことが大切だ。", type: "B", s: "救済" },
+        { t: "間違いを犯した人にも、もう一度戻ってこられる場所が必要だ。", type: "B", s: "再起" },
+        { t: "社会は最も速い人ではなく、最も遅い人に合わせる余裕を持つべきだ。", type: "B", s: "余裕" },
+        { t: "完全な合理性よりも、人が安心できる温かい余白を残したい。", type: "B", s: "温度" },
+        { t: "誰かの弱さは、責める対象ではなく、支えるための合図である。", type: "B", s: "弱さ" },
+        { t: "効率だけで選ばれなかったものにも、残すべき意味がある。", type: "B", s: "意味" },
+        { t: "違いをなくすより、違いを抱えたまま隣にいられる社会が良い。", type: "B", s: "共存" },
+        { t: "古く非効率な習慣でも、人の思い出を支えているなら簡単に捨てるべきではない。", type: "B", s: "思い出" },
+        { t: "正しさで相手を追い詰めるより、相手が話せる空気を守りたい。", type: "B", s: "対話" },
+        { t: "競争に勝てない人にも、尊厳ある居場所が必要だ。", type: "B", s: "尊厳" },
+        { t: "社会の価値は、強い人をどれだけ伸ばすかより、弱い人をどう支えるかに表れる。", type: "B", s: "支援" },
+        { t: "すぐに役立たない人や物事にも、未来の可能性がある。", type: "B", s: "可能性" },
+        { t: "不完全な関係でも、切り捨てずに続けることでしか生まれない信頼がある。", type: "B", s: "信頼" },
+        { t: "人間らしさとは、計算では割り切れない迷いやためらいの中にもある。", type: "B", s: "人間性" },
+        { t: "傷ついた人に必要なのは、正論より先に安心できる場所だ。", type: "B", s: "安心" },
+        { t: "誰かの失敗を記録して管理するより、忘れてやり直せる余地を残したい。", type: "B", s: "赦し" },
+        { t: "他者の価値は、社会にどれだけ貢献したかだけでは測れない。", type: "B", s: "価値" },
+        { t: "異質なものを排除する前に、その背景を知ろうとする姿勢が必要だ。", type: "B", s: "理解" },
+        { t: "みんなが少しずつ損をしても、誰か一人を孤立させない方が良い。", type: "B", s: "連帯" },
+        { t: "便利さのために、人の手触りや偶然の出会いを失いたくない。", type: "B", s: "偶然" },
+        { t: "正しい未来よりも、誰も置いていかない未来を選びたい。", type: "B", s: "未来" },
+        { t: "怒りや悲しみのような感情も、人が人であるために必要なものだ。", type: "B", s: "感情" },
+        { t: "小さな声を聞くためなら、決定が遅くなっても構わない。", type: "B", s: "傾聴" },
+        { t: "完璧な世界より、互いに世話を焼き合う不完全な世界の方が良い。", type: "B", s: "世話" },
+        { t: "たとえ考え方が合わなくても、同じ場所で生きる方法を探すべきだ。", type: "B", s: "共生" },
+        // C +25
+        { t: "人間の限界は、受け入れるものではなく更新するものだ。", type: "C", s: "更新" },
+        { t: "感情的な判断を減らすため、重要な意思決定にはAIの補助を入れるべきだ。", type: "C", s: "AI" },
+        { t: "伝統よりも、検証可能なデータによって社会を設計したい。", type: "C", s: "データ" },
+        { t: "不便を美徳と呼ぶより、仕組みを改善して負担を消す方が誠実だ。", type: "C", s: "改善" },
+        { t: "教育は個性に任せるより、最適化されたカリキュラムで能力を伸ばすべきだ。", type: "C", s: "教育" },
+        { t: "曖昧な経験則より、測定された結果を信じたい。", type: "C", s: "測定" },
+        { t: "人の能力差は、技術によって縮めたり拡張したりできる課題だ。", type: "C", s: "能力" },
+        { t: "社会問題は、道徳論よりもシステム設計で解決するべきだ。", type: "C", s: "設計" },
+        { t: "記憶や学習を外部装置で補えるなら、積極的に使うべきだ。", type: "C", s: "拡張" },
+        { t: "人間らしさを守るためでも、改善できる欠陥を放置するべきではない。", type: "C", s: "欠陥" },
+        { t: "社会の遅さは、多くの場合、技術不足ではなく導入の遅れから生まれる。", type: "C", s: "導入" },
+        { t: "感覚や印象に頼る議論は、数値化して比較できる形にするべきだ。", type: "C", s: "数値化" },
+        { t: "肉体的な制約に縛られず、より自由な存在形式を選べる社会が良い。", type: "C", s: "身体" },
+        { t: "未来のためなら、今の生活様式を大きく作り替える覚悟が必要だ。", type: "C", s: "未来" },
+        { t: "偶然に任せるより、予測モデルで失敗を減らす方が優しい。", type: "C", s: "予測" },
+        { t: "言葉で誤解するくらいなら、思考や情報を直接共有できる技術がほしい。", type: "C", s: "通信" },
+        { t: "人類は自然に合わせるだけでなく、自然条件そのものを調整する段階に来ている。", type: "C", s: "環境" },
+        { t: "長く続いている制度でも、性能が低いなら新しいものに置き換えるべきだ。", type: "C", s: "置換" },
+        { t: "努力に頼るより、努力しなくても成果が出る仕組みを作る方が合理的だ。", type: "C", s: "自動化" },
+        { t: "人格や性格も、本人が望むなら調整できる選択肢があってよい。", type: "C", s: "調整" },
+        { t: "社会の改善には、感動的な物語より再現性のある手順が必要だ。", type: "C", s: "再現性" },
+        { t: "個人の経験談より、大量のデータから見える傾向を重視したい。", type: "C", s: "統計" },
+        { t: "人間が不得意なことは、無理に鍛えるより機械に任せればよい。", type: "C", s: "委任" },
+        { t: "新しい技術が不自然に見えても、幸福を増やすなら採用すべきだ。", type: "C", s: "採用" },
+        { t: "未来の標準から見れば、現在の人間のまま留まること自体が非効率かもしれない。", type: "C", s: "標準" },
+        // D +26
+        { t: "才能の差が大きすぎる社会では、平穏な共同生活は成り立ちにくい。", type: "D", s: "才能" },
+        { t: "個人の成功を称えるより、全員が同じ安心を得られる仕組みを重視したい。", type: "D", s: "安心" },
+        { t: "目立つ個性は、周囲に比較や劣等感を生むことがある。", type: "D", s: "個性" },
+        { t: "できるだけ全員が同じ条件から始められるよう、家庭差や環境差を小さくすべきだ。", type: "D", s: "条件" },
+        { t: "特別扱いされる人がいる限り、誰かの不満は消えない。", type: "D", s: "特別" },
+        { t: "所有する量の差が、心の距離や上下関係を生み出す。", type: "D", s: "所有" },
+        { t: "競争に勝つ喜びより、競争しなくていい安心の方を広げたい。", type: "D", s: "競争" },
+        { t: "名前や肩書きによる印象差を減らすため、もっと匿名的な関係でもよい。", type: "D", s: "匿名" },
+        { t: "突出した英雄を待つより、全員が同じだけ支え合う社会が安定する。", type: "D", s: "安定" },
+        { t: "多様な意見を調整し続けるより、最初から共通の基準に揃えた方が対立は少ない。", type: "D", s: "基準" },
+        { t: "人より優れていることを示す記号は、できるだけ社会から減らすべきだ。", type: "D", s: "記号" },
+        { t: "誰かだけが豊かになるより、全員がほどほどに同じである方が健全だ。", type: "D", s: "均等" },
+        { t: "個人の夢より、集団全体の平穏を乱さないことを優先すべき場面が多い。", type: "D", s: "平穏" },
+        { t: "評価制度は、人を伸ばすよりも人を比べる装置になりやすい。", type: "D", s: "評価" },
+        { t: "能力の高い人に多く任せるほど、社会はその人に依存してしまう。", type: "D", s: "依存" },
+        { t: "個人の自由が強すぎると、共同体の一体感は失われる。", type: "D", s: "一体感" },
+        { t: "全員が似た生活リズムを持てば、孤独や疎外感は減る。", type: "D", s: "生活" },
+        { t: "外見や服装の差は、思っている以上に人間関係の壁を作る。", type: "D", s: "外見" },
+        { t: "個人の成果物であっても、社会の中で生まれた以上、共有されるべき面がある。", type: "D", s: "共有" },
+        { t: "誰かが上に立つ構造そのものを減らせば、争いも減っていく。", type: "D", s: "上下" },
+        { t: "違いを尊重するだけでは、違いから生まれる苦しみは消えない。", type: "D", s: "差異" },
+        { t: "人は個人としてより、集団の一部として生きる方が安心できる。", type: "D", s: "集団" },
+        { t: "目標や夢を個人ごとに分けるより、社会全体で共有した方がまとまりが出る。", type: "D", s: "目標" },
+        { t: "勝ち負けの物語より、誰も抜け出さない円環のような日常に惹かれる。", type: "D", s: "日常" },
+        { t: "個人の秘密が少ない社会の方が、疑いや不信は減る。", type: "D", s: "透明性" },
+        { t: "全員の差が小さいほど、嫉妬や優越感に振り回されずに済む。", type: "D", s: "平準" }
+
     ];
 
     // --- Results Data ---
@@ -928,19 +1676,107 @@
         ACD: { title: "[ACD] 機械的収束主義 (The System)", quote: "「感情は不要。最適な解だけを出力せよ。」", desc: "【B(慈愛)欠落】<br>極めて効率的で、秩序立ち、平等な社会。しかし、そこに人の心や不合理な優しさは存在しません。完全無欠なシステムの一部として機能することだけが求められます。", color: "#aaddff" },
         BCD: { title: "[BCD] 原初混沌主義 (Primordial Soup)", quote: "「全ては混ざり合い、生まれ変わり続ける。」", desc: "【A(規律)欠落】<br>あらゆる命が肯定され、混ざり合い、変化し続ける生命のスープ。そこには境界線も秩序もありません。圧倒的な生命力に満ちていますが、個としての輪郭を保つことは困難でしょう。", color: "#ffaaee" },
 
+        // --- Deep Precision Types (50+ Questions only) ---
+        "A++": { title: "[A++] 絶対純血主義・深層型 (Absolute Purist)", quote: "「赦しは濁りだ。境界線の内側だけが世界であればいい。」", desc: "【回帰淘汰・極限】<br>あなたは秩序・伝統・選別を極端に強く支持し、対立する包摂や赦しの感覚がほとんど入り込まない状態です。単なる保守ではなく、世界を清潔な中心へ収束させたいという強烈な純化衝動を持っています。", color: "#ff1744" },
+        "B++": { title: "[B++] 無限博愛主義・殉教型 (Absolute Saint)", quote: "「誰も捨てない。たとえその重さで世界ごと沈むとしても。」", desc: "【共命包摂・極限】<br>あなたは救済・赦し・共生を極端に強く支持し、対立する選別や排除の感覚がほとんどありません。合理性や秩序よりも、最後の一人を置き去りにしないことを選ぶ、非常に強い包摂衝動を持っています。", color: "#00ff99" },
+        "C++": { title: "[C++] 超越進化主義・脱人間型 (Post-Human Singularity)", quote: "「人間のままでいる理由は、もう残っていない。」", desc: "【適応進転・極限】<br>あなたは技術・更新・最適化を極端に強く支持し、対立する同質的な停滞や平準化をほとんど求めません。人間らしさを守るより、人間という形式そのものを突破することに強く惹かれています。", color: "#2979ff" },
+        "D++": { title: "[D++] 全一集合主義・完全溶解型 (Absolute One)", quote: "「違いが消えれば、痛みも争いも消える。」", desc: "【無差総質・極限】<br>あなたは平等・同質・共有を極端に強く支持し、対立する進化や突出への欲求がほとんどありません。個人差を守るより、差異そのものを薄め、全体が一つの静かな面になることを理想とします。", color: "#b0bec5" },
+
+        "!A": { title: "[!A] 無境界流動型 (Borderless Flux)", quote: "「中心などいらない。流れ続けることこそが自由だ。」", desc: "【A欠落】<br>秩序・伝統・線引きへの反応だけが極端に弱いタイプです。包摂、進化、平等化には反応しても、固定された中心や守るべき型にはほとんど惹かれません。開放的ですが、輪郭のなさが不安定さにつながることもあります。", color: "#ff8a80" },
+        "!B": { title: "[!B] 無慈悲合理型 (Mercyless Logic)", quote: "「救えないものを数え続ける時間こそ、最大の損失だ。」", desc: "【B欠落】<br>慈愛・赦し・共存への反応だけが極端に弱いタイプです。秩序、改善、平準化には反応しても、弱さを抱えたまま受け入れる感覚には距離があります。決断力はありますが、他者からは冷たく見えやすいでしょう。", color: "#69f0ae" },
+        "!C": { title: "[!C] 停滞受容型 (Static Acceptance)", quote: "「変わらなくてもいい。変えないことで守れるものがある。」", desc: "【C欠落】<br>技術・更新・最適化への反応だけが極端に弱いタイプです。秩序、慈愛、平等には反応しても、未来へ作り替える衝動にはあまり乗りません。安定や人間味を守る一方で、改善の機会を逃しやすい面があります。", color: "#82b1ff" },
+        "!D": { title: "[!D] 個体突出型 (Singular Individualism)", quote: "「同じになるくらいなら、孤独でも尖っていたい。」", desc: "【D欠落】<br>同質化・平準化・共有への反応だけが極端に弱いタイプです。秩序、慈愛、進化には反応しても、差を小さくすることには強い抵抗があります。個の輪郭を守る力が強い反面、格差や比較を受け入れやすい傾向があります。", color: "#eceff1" },
+
+        "N+": { title: "[N+] 完全均衡観測者 (High Balance Observer)", quote: "「四つの極は、すべて世界の正しさを少しずつ持っている。」", desc: "【高反応均衡】<br>A/B/C/Dのすべてに高い感度を示しながら、どれか一つに偏りきっていません。思想が薄いのではなく、秩序・慈愛・進化・平等の全てを同時に理解している状態です。分類不能ではなく、多極的な観測者です。", color: "#ffffff" },
+        "N-": { title: "[N-] 低反応中立者 (Low Signal Observer)", quote: "「まだ、どの旗の下にも立つ気はない。」", desc: "【低反応均衡】<br>A/B/C/Dの差が小さく、かつ全体の反応も控えめです。強い思想的確信よりも保留、様子見、距離感が目立ちます。中立的で冷静ですが、結果として輪郭が出にくいタイプでもあります。", color: "#cfd8dc" },
+        "∅": { title: "[∅] 空白応答型 (Null Response)", quote: "「判断しない、という判断。」", desc: "【判定保留】<br>「どちらとも言えない」が非常に多く、思想傾向よりも診断への距離感が強く出ています。迷い、慎重さ、質問への違和感、または意図的な無反応が考えられます。結果を出すには、もう少し強く回答する必要があります。", color: "#78909c" },
+
+        "AB#": { title: "[AB#] 聖域矛盾型 (Sanctuary Paradox)", quote: "「守りたい。だが、拒みたくない。」", desc: "【回帰淘汰 × 共命包摂・矛盾】<br>線引きによって聖域を守りたい心と、誰も排除したくない心が同時に強く出ています。内側への愛は深い一方で、どこまでを内側に含めるかで強い葛藤が生まれやすいタイプです。", color: "#ffca28" },
+        "AC#": { title: "[AC#] 選別進化型 (Selective Ascension)", quote: "「選ばれた中心だけが、未来へ進む資格を持つ。」", desc: "【回帰淘汰 × 適応進転・先鋭】<br>純度と性能を同時に求めるタイプです。守るべき中心を固定しながら、その中心だけをさらに強く、速く、高く進化させようとします。理想は鋭いですが、外側への視線はかなり厳しくなります。", color: "#7c4dff" },
+        "AD#": { title: "[AD#] 無菌統制型 (Sterile Order)", quote: "「全員が同じ手順で動くなら、世界は汚れない。」", desc: "【回帰淘汰 × 無差総質・統制】<br>例外・突出・乱れを強く嫌い、清潔で均一な管理状態を好みます。秩序の美しさと平等な静けさが合体したタイプで、安定性は高い一方、個人の自由はかなり圧縮されやすいでしょう。", color: "#ff8a9a" },
+        "BC#": { title: "[BC#] 全員救済改造型 (Universal Uplift)", quote: "「誰も置き去りにしない。そのために、全員を作り替える。」", desc: "【共命包摂 × 適応進転・救済】<br>弱者を切り捨てるのではなく、技術や制度で全員を引き上げようとするタイプです。優しさと合理性が同時に強く、救済のための改造を肯定しやすい傾向があります。", color: "#00e5ff" },
+        "BD#": { title: "[BD#] 優しい檻型 (Tender Cage)", quote: "「傷つかないように、みんな同じ毛布の中へ。」", desc: "【共命包摂 × 無差総質・揺籃】<br>誰も傷つかないように、差異や競争をやわらかく薄めたいタイプです。とても優しい思想ですが、安心を守るために個性の輪郭まで溶かしてしまう危険もあります。", color: "#64ffda" },
+        "CD#": { title: "[CD#] 集合知性臨界型 (Hive Threshold)", quote: "「個の限界は、接続によって消える。」", desc: "【適応進転 × 無差総質・集合】<br>技術によって個人差を調整し、全体として最適化された集合知性を目指すタイプです。進化と均質化が同時に強く、個人よりもネットワーク化された全体に未来を見ます。", color: "#40c4ff" },
+
         NEUTRAL: { title: "[N] 中立主義的思考 (The Observer)", quote: "「世界の天秤を眺める観測者」", desc: "どの思想にも理解を示し、同時に距離を置いています。バランサーとして機能しますが、決断を下せず時代の波に流されるだけの存在になる危険性もあります。", color: "#ffffff" }
     };
 
     // --- State ---
     let activeQuestions = [];
+    let answerHistory = [];
     let currentQIndex = 0;
     let scores = { A: 0, B: 0, C: 0, D: 0 };
     let maxPossibleScore = { A: 0, B: 0, C: 0, D: 0 };
     let currentMode = 'desktop';
+    let currentTheme = ['light', 'dark'].includes(localStorage.getItem('mtps-theme')) ? localStorage.getItem('mtps-theme') : 'dark';
+    let currentCourse = { id: 'STANDARD', label: 'STANDARD', count: 25 };
+    let pendingCourseCount = null;
+    let currentQuestionSetMeta = { method: '未生成', seedLabel: '', typeCounts: { A: 0, B: 0, C: 0, D: 0 } };
+
+    // Course-specific evaluation settings.
+    // STANDARD / LIGHT use stable balanced sampling to avoid result gacha.
+    // HEAVY/MAX use broad or full question sets with weight correction. MAX is balanced to A/B/C/D = 50 each.
+    const quizModes = {
+        25: {
+            id: 'STANDARD',
+            label: 'STANDARD',
+            count: 25,
+            selection: 'stable-balanced',
+            evaluation: 'rounded-normalized',
+            neutralSD: 7.5,
+            hybridDiff: 10.0,
+            triDiff: 7.0,
+            plusLine: 0.42,
+            shareName: 'STANDARD / 25問',
+            selectionLabel: '固定バランス抽出'
+        },
+        50: {
+            id: 'LIGHT',
+            label: 'LIGHT PRECISION',
+            count: 50,
+            selection: 'stable-balanced',
+            evaluation: 'normalized',
+            neutralSD: 6.5,
+            hybridDiff: 8.0,
+            triDiff: 5.5,
+            plusLine: 0.48,
+            shareName: 'LIGHT PRECISION / 50問',
+            selectionLabel: '固定バランス抽出'
+        },
+        100: {
+            id: 'HEAVY',
+            label: 'HEAVY PRECISION',
+            count: 100,
+            selection: 'all-weighted',
+            evaluation: 'pair-dominance',
+            neutralSD: 5.0,
+            hybridDiff: 6.0,
+            triDiff: 4.0,
+            plusLine: 0.55,
+            shareName: 'HEAVY PRECISION / 100問',
+            selectionLabel: '固定バランス抽出'
+        },
+        200: {
+            id: 'MAX',
+            label: 'MAX PRECISION',
+            count: 200,
+            selection: 'all-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 4.0,
+            hybridDiff: 4.5,
+            triDiff: 3.0,
+            plusLine: 0.60,
+            shareName: 'MAX PRECISION / 200問',
+            selectionLabel: '全問バランス補正'
+        }
+    };
 
     // --- DOM Elements ---
     const deviceScreen = document.getElementById('device-screen');
     const warningScreen = document.getElementById('warning-screen');
+    const noticeScreen = document.getElementById('notice-screen');
+    const creditScreen = document.getElementById('credit-screen');
+    const historyScreen = document.getElementById('history-screen');
     const introScreen = document.getElementById('intro-screen');
     const quizScreen = document.getElementById('quiz-screen');
     const resultScreen = document.getElementById('result-screen');
@@ -948,9 +1784,26 @@
     const body = document.body;
 
     // --- UI Logic ---
+    function applyTheme(theme) {
+        currentTheme = theme === 'light' ? 'light' : 'dark';
+        localStorage.setItem('mtps-theme', currentTheme);
+        body.classList.remove('theme-light', 'theme-dark');
+        body.classList.add(`theme-${currentTheme}`);
+        const toggle = document.getElementById('theme-toggle');
+        if (toggle) {
+            toggle.textContent = currentTheme === 'light' ? 'DARK MODE' : 'LIGHT MODE';
+        }
+    }
+
+    function toggleTheme() {
+        applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+    }
+
+    applyTheme(currentTheme);
+
     function setMode(mode) {
         currentMode = mode;
-        body.className = `mode-${mode}`;
+        body.className = `mode-${mode} theme-${currentTheme}`;
         const root = document.documentElement;
 
         if (mode === 'mobile') {
@@ -963,7 +1816,7 @@
             root.style.setProperty('--font-scale', '1');
         }
 
-        switchScreen(deviceScreen, warningScreen); // Go to Warning first
+        switchScreen(deviceScreen, introScreen);
     }
 
     function goToIntro() {
@@ -989,6 +1842,48 @@
         }
     }
 
+
+    function showCourseWarning(count) {
+        pendingCourseCount = count;
+        switchScreen(introScreen, warningScreen);
+    }
+
+    function hideCourseWarning() {
+        pendingCourseCount = null;
+        switchScreen(warningScreen, introScreen);
+    }
+
+    function confirmCourseWarning() {
+        const count = pendingCourseCount || 200;
+        pendingCourseCount = null;
+        startQuiz(count, warningScreen);
+    }
+
+    function showMainNotice() {
+        switchScreen(introScreen, noticeScreen);
+    }
+
+    function hideMainNotice() {
+        switchScreen(noticeScreen, introScreen);
+    }
+
+    function showCredit() {
+        switchScreen(introScreen, creditScreen);
+    }
+
+    function hideCredit() {
+        switchScreen(creditScreen, introScreen);
+    }
+
+    function showHistory() {
+        renderHistory();
+        switchScreen(introScreen, historyScreen);
+    }
+
+    function hideHistory() {
+        switchScreen(historyScreen, introScreen);
+    }
+
     function showDatabase() {
         renderDatabaseList();
         switchScreen(introScreen, databaseScreen);
@@ -1003,30 +1898,51 @@
         container.innerHTML = ''; // Clear previous content
 
         const groups = {
-            fanatic: { title: "単独思想：熱狂派 (+)", items: [] },
-            moderate: { title: "単独思想：穏健派 (-)", items: [] },
-            hybrid: { title: "複合思想 (Hybrid / Tri-brid)", items: [] },
-            neutral: { title: "特殊・中立", items: [] }
+            standardFanatic: { title: "STANDARD対応：単独思想・熱狂派 (+)", items: [] },
+            standardModerate: { title: "STANDARD対応：単独思想・穏健派 (-)", items: [] },
+            standardHybrid: { title: "STANDARD対応：複合思想 (Hybrid / Tri-brid)", items: [] },
+            standardNeutral: { title: "STANDARD対応：特殊・中立", items: [] },
+            precisionExtreme: { title: "精密限定：極限単独型 (++)", items: [] },
+            precisionMissing: { title: "精密限定：欠落型 (!)", items: [] },
+            precisionNeutral: { title: "精密限定：特殊・中立", items: [] },
+            precisionHybrid: { title: "精密限定：矛盾複合型 (#)", items: [] }
         };
 
         for (const [key, data] of Object.entries(resultsData)) {
-            if (key === 'NEUTRAL') {
-                groups.neutral.items.push({key, ...data});
+            if (key.endsWith('++')) {
+                groups.precisionExtreme.items.push({key, ...data});
+            } else if (key.startsWith('!')) {
+                groups.precisionMissing.items.push({key, ...data});
+            } else if (key.endsWith('#')) {
+                groups.precisionHybrid.items.push({key, ...data});
+            } else if (key === 'N+' || key === 'N-' || key === '∅') {
+                groups.precisionNeutral.items.push({key, ...data});
+            } else if (key === 'NEUTRAL') {
+                groups.standardNeutral.items.push({key, ...data});
             } else if (key.endsWith('+')) {
-                groups.fanatic.items.push({key, ...data});
+                groups.standardFanatic.items.push({key, ...data});
             } else if (key.endsWith('-')) {
-                groups.moderate.items.push({key, ...data});
+                groups.standardModerate.items.push({key, ...data});
             } else {
-                groups.hybrid.items.push({key, ...data});
+                groups.standardHybrid.items.push({key, ...data});
             }
         }
 
-        // Render groups
-        [groups.fanatic, groups.moderate, groups.hybrid, groups.neutral].forEach(group => {
+        // Render STANDARD-compatible results first, then precision-only results.
+        [
+            groups.standardFanatic,
+            groups.standardModerate,
+            groups.standardHybrid,
+            groups.standardNeutral,
+            groups.precisionExtreme,
+            groups.precisionMissing,
+            groups.precisionNeutral,
+            groups.precisionHybrid
+        ].forEach(group => {
             if (group.items.length === 0) return;
 
             const groupTitle = document.createElement('h3');
-            groupTitle.style.cssText = "margin: 1.5rem 0 1rem; color: #fff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;";
+            groupTitle.className = 'db-group-title';
             groupTitle.innerText = group.title;
             container.appendChild(groupTitle);
 
@@ -1042,11 +1958,11 @@
                 const shortDesc = item.desc.split('。')[0] + '...';
 
                 card.innerHTML = `
-                    <h3>${item.key.replace("NEUTRAL", "NEUTRAL")} ${item.title}</h3>
+                    <h3>${item.key.replace("NEUTRAL", "N")} ${item.title}</h3>
                     <span class="db-short-desc">${shortDesc}</span>
                     <div class="db-details">
-                        <div style="font-style:italic; color:#aaa; margin-bottom:0.5rem; border-bottom:1px solid #444; padding-bottom:0.5rem;">${item.quote}</div>
-                        <div style="line-height:1.6;">${item.desc}</div>
+                        <div class="db-detail-quote" style="font-style:italic; color:#aaa; margin-bottom:0.5rem; border-bottom:1px solid #444; padding-bottom:0.5rem;">${item.quote}</div>
+                        <div class="db-detail-desc" style="line-height:1.6;">${item.desc}</div>
                     </div>
                 `;
 
@@ -1072,45 +1988,377 @@
         'D': 'C'
     };
 
-    function startQuiz(count) {
-        currentQIndex = 0;
-        scores = { A: 0, B: 0, C: 0, D: 0 };
-        
-        // Mode Setup
-        if (count === 25) {
-            // Standard: Random 25
-            activeQuestions = [...questionPool].sort(() => 0.5 - Math.random()).slice(0, 25);
-        } else if (count === 50) {
-            // Light Precision: Random 50 from 100
-            activeQuestions = [...questionPool].sort(() => 0.5 - Math.random()).slice(0, 50);
-        } else if (count === 100) {
-            // Heavy Precision: All 100 questions
-            activeQuestions = [...questionPool].sort(() => 0.5 - Math.random());
+    function hashStringToSeed(str) {
+        // Simple deterministic hash. Good enough for stable question ordering.
+        let h = 2166136261;
+        for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+
+    function seededRandom(seed) {
+        // Mulberry32 PRNG: deterministic, tiny, and browser-friendly.
+        return function() {
+            let t = seed += 0x6D2B79F5;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function getStableCourseSeed(course) {
+        const storageKey = `mtps-stable-seed-v2-${course.id}-${course.count}`;
+        let seedText = '';
+
+        try {
+            seedText = localStorage.getItem(storageKey) || '';
+            if (!seedText) {
+                seedText = `${course.id}-${course.count}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                localStorage.setItem(storageKey, seedText);
+            }
+        } catch (e) {
+            // In private browsing or restricted environments, localStorage may fail.
+            seedText = `${course.id}-${course.count}-fallback`;
         }
 
-        // Calculate Max Possible Score for this set
-        // A type question contributes +2 to A (if Agree) OR +2 to B (if Disagree)
-        // Thus, A's max possible is (Qs of type A) * 2 + (Qs of type B) * 2
-        // Wait, NO. If a user answers ALL 'A' questions strongly agree, they get max A score from A questions.
-        // If they answer ALL 'B' questions strongly disagree, they get max A score from B questions.
-        // So Max Score for A = (Count(A) + Count(Opposition(A))) * 2
-        
-        maxPossibleScore = { A: 0, B: 0, C: 0, D: 0 };
-        
-        // First count question types
-        let typeCounts = { A: 0, B: 0, C: 0, D: 0 };
-        activeQuestions.forEach(q => {
-            if(typeCounts[q.type] !== undefined) typeCounts[q.type]++;
+        return {
+            seedText,
+            seed: hashStringToSeed(seedText),
+            label: hashStringToSeed(seedText).toString(16).toUpperCase().slice(0, 6)
+        };
+    }
+
+    function shuffleArray(array, rng = Math.random) {
+        const copied = [...array];
+        for (let i = copied.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [copied[i], copied[j]] = [copied[j], copied[i]];
+        }
+        return copied;
+    }
+
+    function getTypeCounts(questionSet) {
+        const typeCounts = { A: 0, B: 0, C: 0, D: 0 };
+        questionSet.forEach(q => {
+            if (typeCounts[q.type] !== undefined) typeCounts[q.type]++;
+        });
+        return typeCounts;
+    }
+
+    function applyTypeWeights(questionSet) {
+        const typeCounts = getTypeCounts(questionSet);
+        const targetPerType = questionSet.length / 4;
+
+        return questionSet.map(q => {
+            const countForType = typeCounts[q.type] || 1;
+            const weight = targetPerType / countForType;
+            return { ...q, weight };
+        });
+    }
+
+    function buildBalancedQuestionSet(course) {
+        const count = course.count;
+        const seedInfo = getStableCourseSeed(course);
+        const rng = seededRandom(seedInfo.seed);
+        const types = ['A', 'B', 'C', 'D'];
+        const shuffledTypes = shuffleArray(types, rng);
+        const quotas = { A: Math.floor(count / 4), B: Math.floor(count / 4), C: Math.floor(count / 4), D: Math.floor(count / 4) };
+
+        // Remaining 1~3 questions are assigned by seeded order.
+        // Weight correction later cancels the small numerical advantage.
+        for (let i = 0; i < count % 4; i++) {
+            quotas[shuffledTypes[i]]++;
+        }
+
+        const buckets = { A: [], B: [], C: [], D: [] };
+        questionPool.forEach(q => {
+            if (buckets[q.type]) buckets[q.type].push(q);
         });
 
-        // Then calc max possible
-        maxPossibleScore.A = (typeCounts.A + typeCounts.B) * 2;
-        maxPossibleScore.B = (typeCounts.B + typeCounts.A) * 2;
-        maxPossibleScore.C = (typeCounts.C + typeCounts.D) * 2;
-        maxPossibleScore.D = (typeCounts.D + typeCounts.C) * 2;
+        types.forEach(type => {
+            buckets[type] = shuffleArray(buckets[type], rng);
+        });
+
+        let selected = [];
+        types.forEach(type => {
+            selected = selected.concat(buckets[type].slice(0, quotas[type]));
+        });
+
+        selected = shuffleArray(selected, rng);
+        selected = applyTypeWeights(selected);
+
+        currentQuestionSetMeta = {
+            method: course.selectionLabel,
+            seedLabel: seedInfo.label,
+            typeCounts: getTypeCounts(selected)
+        };
+
+        return selected;
+    }
+
+    function buildQuestionSet(course) {
+        if (course.selection === 'all-balanced' || course.count >= questionPool.length) {
+            const seedInfo = getStableCourseSeed(course);
+            const rng = seededRandom(seedInfo.seed);
+            const selected = applyTypeWeights(shuffleArray(questionPool, rng));
+
+            currentQuestionSetMeta = {
+                method: course.selectionLabel,
+                seedLabel: seedInfo.label,
+                typeCounts: getTypeCounts(selected)
+            };
+
+            return selected;
+        }
+
+        if (course.selection === 'all-weighted') {
+            const seedInfo = getStableCourseSeed(course);
+            const rng = seededRandom(seedInfo.seed);
+            const baseQuestions = questionPool.slice(0, course.count);
+            const selected = applyTypeWeights(shuffleArray(baseQuestions, rng));
+
+            currentQuestionSetMeta = {
+                method: course.selectionLabel,
+                seedLabel: seedInfo.label,
+                typeCounts: getTypeCounts(selected)
+            };
+
+            return selected;
+        }
+
+        return buildBalancedQuestionSet(course);
+    }
+
+    function calculateMaxPossibleScores(questionSet) {
+        const weightedTypeTotals = { A: 0, B: 0, C: 0, D: 0 };
+
+        questionSet.forEach(q => {
+            if (weightedTypeTotals[q.type] !== undefined) {
+                weightedTypeTotals[q.type] += q.weight || 1;
+            }
+        });
+
+        return {
+            A: (weightedTypeTotals.A + weightedTypeTotals.B) * 2,
+            B: (weightedTypeTotals.B + weightedTypeTotals.A) * 2,
+            C: (weightedTypeTotals.C + weightedTypeTotals.D) * 2,
+            D: (weightedTypeTotals.D + weightedTypeTotals.C) * 2
+        };
+    }
+
+    function formatScore(value) {
+        return Math.abs(value - Math.round(value)) < 0.001 ? String(Math.round(value)) : value.toFixed(1);
+    }
+
+    function getQuestionSetText() {
+        const c = currentQuestionSetMeta.typeCounts || { A: 0, B: 0, C: 0, D: 0 };
+        return `${currentQuestionSetMeta.method} / A:${c.A} B:${c.B} C:${c.C} D:${c.D}`;
+    }
+
+    function getNormalizedScores() {
+        const normalized = { A: 0, B: 0, C: 0, D: 0 };
+
+        Object.keys(scores).forEach(type => {
+            const max = maxPossibleScore[type] || 1;
+            normalized[type] = (scores[type] / max) * 100;
+        });
+
+        return normalized;
+    }
+
+    function getCompositionScores(normalized) {
+        const source = normalized || getNormalizedScores();
+        const total = ['A', 'B', 'C', 'D'].reduce((sum, type) => sum + Math.max(0, Number(source[type] || 0)), 0);
+
+        if (total <= 0) {
+            return { A: 0, B: 0, C: 0, D: 0 };
+        }
+
+        return {
+            A: (Math.max(0, Number(source.A || 0)) / total) * 100,
+            B: (Math.max(0, Number(source.B || 0)) / total) * 100,
+            C: (Math.max(0, Number(source.C || 0)) / total) * 100,
+            D: (Math.max(0, Number(source.D || 0)) / total) * 100
+        };
+    }
+
+    function getEvaluationScores() {
+        const normalized = getNormalizedScores();
+
+        if (currentCourse.evaluation === 'rounded-normalized') {
+            // STANDARD is intentionally rough: it avoids false precision by rounding to 5% steps.
+            return {
+                A: Math.round(normalized.A / 5) * 5,
+                B: Math.round(normalized.B / 5) * 5,
+                C: Math.round(normalized.C / 5) * 5,
+                D: Math.round(normalized.D / 5) * 5
+            };
+        }
+
+        if (currentCourse.evaluation === 'normalized') {
+            return normalized;
+        }
+
+        // HEAVY / MAX PRECISION:
+        // Score itself + how much it beats its opposing ideology.
+        // This makes contradictory high scores less likely to create the same result every time.
+        return {
+            A: normalized.A * 0.65 + Math.max(0, normalized.A - normalized.B) * 0.35,
+            B: normalized.B * 0.65 + Math.max(0, normalized.B - normalized.A) * 0.35,
+            C: normalized.C * 0.65 + Math.max(0, normalized.C - normalized.D) * 0.35,
+            D: normalized.D * 0.65 + Math.max(0, normalized.D - normalized.C) * 0.35
+        };
+    }
+
+    function standardDeviation(values) {
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const variance = values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / values.length;
+        return Math.sqrt(variance);
+    }
+
+    function getAnswerStats() {
+        const total = answerHistory.length || 1;
+        const neutralCount = answerHistory.filter(a => a.answerValue === 0).length;
+        const strongCount = answerHistory.filter(a => Math.abs(a.answerValue) === 2).length;
+        const weakCount = answerHistory.filter(a => Math.abs(a.answerValue) === 1).length;
+
+        return {
+            total,
+            neutralCount,
+            strongCount,
+            weakCount,
+            neutralRate: neutralCount / total,
+            strongRate: strongCount / total,
+            activeRate: (strongCount + weakCount) / total
+        };
+    }
+
+    function mean(values) {
+        return values.reduce((a, b) => a + b, 0) / values.length;
+    }
+
+    function getSpecialResultKey() {
+        // 50問以上の精密コースだけで発動。STANDARDでは既存判定のみを使う。
+        if (!currentCourse || currentCourse.count < 50) return null;
+
+        const normalized = getNormalizedScores();
+        const types = ['A', 'B', 'C', 'D'];
+        const values = types.map(t => normalized[t]);
+        const avg = mean(values);
+        const sd = standardDeviation(values);
+        const stats = getAnswerStats();
+
+        // 1) 中立連打・判定保留
+        if (stats.neutralRate >= 0.72 || (stats.neutralRate >= 0.62 && stats.activeRate <= 0.38)) {
+            return '∅';
+        }
+
+        // 2) 高均衡 / 低均衡
+        if (sd <= 4.2 && avg >= 42 && stats.neutralRate <= 0.35) {
+            return 'N+';
+        }
+
+        if (sd <= 5.0 && (avg <= 28 || stats.neutralRate >= 0.48)) {
+            return 'N-';
+        }
+
+        const sorted = types.sort((a, b) => {
+            const diff = normalized[b] - normalized[a];
+            if (Math.abs(diff) > 0.0001) return diff;
+            return scores[b] - scores[a];
+        });
+
+        const top = sorted[0];
+        const second = sorted[1];
+        const third = sorted[2];
+        const bottom = sorted[3];
+        const oppositeMap = { A: 'B', B: 'A', C: 'D', D: 'C' };
+        const topScore = normalized[top];
+        const secondScore = normalized[second];
+        const thirdScore = normalized[third];
+        const bottomScore = normalized[bottom];
+        const oppositeScore = normalized[oppositeMap[top]];
+
+        // 3) 既存 + のさらに上。対立思想がほぼ沈黙している場合のみ。
+        if (topScore >= 72 && oppositeScore <= 12 && (topScore - secondScore) >= 18) {
+            const key = `${top}++`;
+            if (resultsData[key]) return key;
+        }
+
+        // 4) 1思想だけ極端に低い欠落型。
+        const otherTypes = sorted.slice(0, 3);
+        const otherAvg = mean(otherTypes.map(t => normalized[t]));
+        if (bottomScore <= 15 && otherAvg >= 34 && (thirdScore - bottomScore) >= 12) {
+            const key = `!${bottom}`;
+            if (resultsData[key]) return key;
+        }
+
+        // 5) 2思想が高く、近く、3位以下を離している場合の精密複合 #。
+        const pairKey = [top, second].sort().join('') + '#';
+        if (resultsData[pairKey] && topScore >= 42 && secondScore >= 42 && (topScore - secondScore) <= 6 && (secondScore - thirdScore) >= 7) {
+            return pairKey;
+        }
+
+        return null;
+    }
+
+    function decideResultKey() {
+        const specialResultKey = getSpecialResultKey();
+        if (specialResultKey) return specialResultKey;
+
+        const evaluationScores = getEvaluationScores();
+        const sorted = Object.keys(evaluationScores).sort((a, b) => {
+            const diff = evaluationScores[b] - evaluationScores[a];
+            if (diff !== 0) return diff;
+            return scores[b] - scores[a]; // Raw score tie-breaker
+        });
+
+        const values = Object.values(evaluationScores);
+        const sd = standardDeviation(values);
+
+        if (sd < currentCourse.neutralSD) {
+            return 'NEUTRAL';
+        }
+
+        const s1 = evaluationScores[sorted[0]];
+        const s2 = evaluationScores[sorted[1]];
+        const s3 = evaluationScores[sorted[2]];
+
+        if ((s1 - s3) <= currentCourse.triDiff) {
+            const triKey = [sorted[0], sorted[1], sorted[2]].sort().join('');
+            if (resultsData[triKey]) return triKey;
+        }
+
+        if ((s1 - s2) <= currentCourse.hybridDiff) {
+            const biKey = [sorted[0], sorted[1]].sort().join('');
+            if (resultsData[biKey]) return biKey;
+        }
+
+        const winnerType = sorted[0];
+        const maxScore = maxPossibleScore[winnerType] || 1;
+        const intensityRatio = scores[winnerType] / maxScore;
+
+        return winnerType + (intensityRatio >= currentCourse.plusLine ? '+' : '-');
+    }
+
+    function getCourseDebugText() {
+        const normalized = getNormalizedScores();
+        return `${currentCourse.shareName} / ${getQuestionSetText()} / 評価:${currentCourse.evaluation} / 補正 A:${normalized.A.toFixed(1)} B:${normalized.B.toFixed(1)} C:${normalized.C.toFixed(1)} D:${normalized.D.toFixed(1)}`;
+    }
+
+    function startQuiz(count, fromScreen = introScreen) {
+        currentCourse = quizModes[count] || quizModes[25];
+        currentQIndex = 0;
+        answerHistory = [];
+        scores = { A: 0, B: 0, C: 0, D: 0 };
+
+        activeQuestions = buildQuestionSet(currentCourse);
+        maxPossibleScore = calculateMaxPossibleScores(activeQuestions);
 
         document.getElementById('total-q').innerText = activeQuestions.length;
-        switchScreen(introScreen, quizScreen);
+        switchScreen(fromScreen, quizScreen);
         renderQuestion();
     }
 
@@ -1140,12 +2388,22 @@
         // Value -1 (Disagree) -> +1 to opposition[q.type]
         // Value -2 (Strongly Disagree) -> +2 to opposition[q.type]
 
+        const weight = q.weight || 1;
+
         if (value > 0) {
-            scores[q.type] += value;
+            scores[q.type] += value * weight;
         } else if (value < 0) {
             const oppType = opposition[q.type];
-            scores[oppType] += Math.abs(value);
+            scores[oppType] += Math.abs(value) * weight;
         }
+
+        answerHistory.push({
+            question: q.t,
+            topic: q.s,
+            type: q.type,
+            weight,
+            answerValue: value
+        });
 
         currentQIndex++;
         if (currentQIndex < activeQuestions.length) {
@@ -1155,92 +2413,184 @@
         }
     }
 
+    function getReadableResultColor(color) {
+        const raw = String(color || '').trim();
+        const fallback = currentTheme === 'light' ? '#1f2937' : '#ffffff';
+        if (currentTheme !== 'light') return raw || fallback;
+
+        const named = {
+            white: '#ffffff',
+            '#fff': '#ffffff',
+            '#ffffff': '#ffffff',
+            '#cfd8dc': '#cfd8dc'
+        };
+        const normalizedName = raw.toLowerCase();
+        const hex = named[normalizedName] || raw;
+
+        const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+        if (!m) return raw || fallback;
+
+        const n = m[1];
+        const r = parseInt(n.slice(0, 2), 16);
+        const g = parseInt(n.slice(2, 4), 16);
+        const b = parseInt(n.slice(4, 6), 16);
+        const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+        // In light mode, white / pale result colors such as N, N+, N- disappear.
+        // Darken only those high-luminance colors; vivid A/B/C/D colors stay unchanged.
+        if (luminance >= 0.72) return '#1f2937';
+        return raw || fallback;
+    }
+
+    const HISTORY_STORAGE_KEY = 'mtps-result-history-v1';
+    const HISTORY_LIMIT = 50;
+
+    function loadHistory() {
+        try {
+            const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveHistoryEntry(resultKey, data, normalized, composition) {
+        const stats = getAnswerStats();
+        const displayKey = resultKey === 'NEUTRAL' ? 'N' : resultKey;
+        const entry = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            savedAt: new Date().toISOString(),
+            resultKey: displayKey,
+            resultTitle: data.title,
+            resultColor: data.color,
+            course: currentCourse.shareName,
+            courseId: currentCourse.id,
+            questionCount: activeQuestions.length,
+            questionSet: getQuestionSetText(),
+            scores: {
+                A: Number(scores.A.toFixed(3)),
+                B: Number(scores.B.toFixed(3)),
+                C: Number(scores.C.toFixed(3)),
+                D: Number(scores.D.toFixed(3))
+            },
+            normalized: {
+                A: Number(normalized.A.toFixed(1)),
+                B: Number(normalized.B.toFixed(1)),
+                C: Number(normalized.C.toFixed(1)),
+                D: Number(normalized.D.toFixed(1))
+            },
+            composition: {
+                A: Number((composition?.A || 0).toFixed(1)),
+                B: Number((composition?.B || 0).toFixed(1)),
+                C: Number((composition?.C || 0).toFixed(1)),
+                D: Number((composition?.D || 0).toFixed(1))
+            },
+            answerStats: {
+                total: stats.total,
+                neutralRate: Number((stats.neutralRate * 100).toFixed(1)),
+                strongRate: Number((stats.strongRate * 100).toFixed(1)),
+                activeRate: Number((stats.activeRate * 100).toFixed(1))
+            }
+        };
+
+        const history = loadHistory();
+        history.unshift(entry);
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, HISTORY_LIMIT)));
+    }
+
+    function formatHistoryDate(isoString) {
+        const date = new Date(isoString);
+        if (Number.isNaN(date.getTime())) return '日時不明';
+        return date.toLocaleString('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderHistory() {
+        const container = document.getElementById('history-list');
+        if (!container) return;
+
+        const history = loadHistory();
+        if (history.length === 0) {
+            container.innerHTML = '<div class="history-empty">まだ履歴がありません。<br>診断を完了すると、ここに自動で保存されます。</div>';
+            return;
+        }
+
+        container.innerHTML = history.map(entry => {
+            const resultColor = getReadableResultColor(entry.resultColor || '#ffffff');
+            const safeTitle = escapeHtml(entry.resultTitle || '診断結果');
+            const safeCourse = escapeHtml(entry.course || 'UNKNOWN COURSE');
+            const safeQuestionSet = escapeHtml(entry.questionSet || '問題構成不明');
+            const n = entry.normalized || { A: 0, B: 0, C: 0, D: 0 };
+            const comp = entry.composition || getCompositionScores(n);
+            const raw = entry.scores || { A: 0, B: 0, C: 0, D: 0 };
+            const stats = entry.answerStats || {};
+
+            return `
+                <div class="history-card" style="border-left-color:${resultColor};">
+                    <div class="history-card-top">
+                        <div>
+                            <div class="history-result-code" style="color:${resultColor};">${escapeHtml(entry.resultKey || 'N')}</div>
+                            <div class="history-result-title" style="color:${resultColor};">${safeTitle}</div>
+                        </div>
+                        <div class="history-date">${formatHistoryDate(entry.savedAt)}<br>${escapeHtml(entry.courseId || '')}</div>
+                    </div>
+                    <div class="history-course">${safeCourse}<br>${safeQuestionSet}</div>
+                    <div class="history-score-grid">
+                        <div class="history-score-item" style="border-top:2px solid var(--color-a);">A<strong>${Number(comp.A || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.A || 0).toFixed(1)}%</span></div>
+                        <div class="history-score-item" style="border-top:2px solid var(--color-b);">B<strong>${Number(comp.B || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.B || 0).toFixed(1)}%</span></div>
+                        <div class="history-score-item" style="border-top:2px solid var(--color-c);">C<strong>${Number(comp.C || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.C || 0).toFixed(1)}%</span></div>
+                        <div class="history-score-item" style="border-top:2px solid var(--color-d);">D<strong>${Number(comp.D || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.D || 0).toFixed(1)}%</span></div>
+                    </div>
+                    <div style="margin-top:0.75rem; color:var(--color-dim); font-size:0.78rem; font-family:var(--font-mono); line-height:1.6;">
+                        Neutral ${Number(stats.neutralRate || 0).toFixed(1)}% / Strong ${Number(stats.strongRate || 0).toFixed(1)}% / Active ${Number(stats.activeRate || 0).toFixed(1)}%
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function clearHistory() {
+        const ok = window.confirm('保存された診断履歴をすべて削除しますか？');
+        if (!ok) return;
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
+        renderHistory();
+    }
+
     function showResult() {
         document.getElementById('progress-fill').style.width = '100%';
 
-        // Chart Data Calculation (Raw scores are now always positive or zero)
-        let chartData = {
-            A: scores.A,
-            B: scores.B,
-            C: scores.C,
-            D: scores.D
-        };
-        const total = Object.values(chartData).reduce((a, b) => a + b, 0) || 1;
-        
-        const pA = (chartData.A / total) * 100;
-        const pB = (chartData.B / total) * 100;
-        const pC = (chartData.C / total) * 100;
-        const pD = (chartData.D / total) * 100;
+        // Result intensity is each axis' normalized reaction rate.
+        // The pie chart uses composition, so A+B+C+D is always 100% visually.
+        const normalized = getNormalizedScores();
+        const composition = getCompositionScores(normalized);
 
-        // Sorting for Winner Determination
-        let sorted = Object.keys(scores).sort((a, b) => scores[b] - scores[a]);
-        
-        const s1 = scores[sorted[0]];
-        const s2 = scores[sorted[1]];
-        const s3 = scores[sorted[2]];
-        
-        // Standard Deviation
-        const values = Object.values(scores);
-        const mean = values.reduce((a, b) => a + b) / 4;
-        const variance = values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / 4;
-        const sd = Math.sqrt(variance);
-        
-        let resultKey = sorted[0];
+        const pA = composition.A;
+        const pB = composition.B;
+        const pC = composition.C;
+        const pD = composition.D;
 
-        // --- Decision Tree ---
-        // Thresholds based on RAW SCORE differences, roughly relative to total possible questions
-        // Let's use a percentage of total actual points scored? Or max possible?
-        // Max possible for one type is roughly QuestionCount (if perfect split A/B).
-        // Let's stick to a robust simple logic.
-        
-        // Neutral Threshold: SD is small.
-        // e.g. If scores are 25, 24, 26, 25 -> SD is small.
-        // Threshold = Total Score * 0.05 ? No.
-        // Let's try constant relative to Q count. 50 questions -> max score ~50-60.
-        const qCount = activeQuestions.length;
-        const neutralSDThreshold = qCount * 0.15; // 100Q -> SD < 15
-
-        // Hybrid Threshold: Difference between Top1 and Top2
-        const hybridDiff = qCount * 0.2; // 100Q -> 20 points diff
-
-        if (sd < neutralSDThreshold) { 
-            resultKey = "NEUTRAL";
-        } else {
-            const diff1_2 = s1 - s2;
-            const diff1_3 = s1 - s3;
-
-            if (diff1_3 <= hybridDiff) {
-                // Top 3 are close -> Tri-brid
-                let top3 = [sorted[0], sorted[1], sorted[2]].sort();
-                let triKey = top3.join("");
-                if (resultsData[triKey]) resultKey = triKey;
-            } else if (diff1_2 <= hybridDiff) {
-                // Top 2 are close -> Hybrid
-                let top2 = [sorted[0], sorted[1]].sort();
-                let biKey = top2.join("");
-                if (resultsData[biKey]) resultKey = biKey;
-            } else {
-                // Single Winner -> Check Intensity (+ or -)
-                // Threshold: 40% of Theoretical Max Score for that type
-                const winnerType = sorted[0];
-                const maxScore = maxPossibleScore[winnerType];
-                
-                // If maxScore is 0 (shouldn't happen), avoid NaN
-                const ratio = maxScore > 0 ? (s1 / maxScore) : 0;
-                
-                if (ratio >= 0.4) {
-                    resultKey = winnerType + "+";
-                } else {
-                    resultKey = winnerType + "-";
-                }
-            }
-        }
-
-        const data = resultsData[resultKey] || resultsData[sorted[0] + "-"]; // Fallback
+        const resultKey = decideResultKey();
+        const data = resultsData[resultKey] || resultsData.NEUTRAL;
 
         // Render Result
         switchScreen(quizScreen, resultScreen);
-        
+
         // Chart Animation
         const chartObj = { a: 0, b: 0, c: 0, d: 0 };
         gsap.to(chartObj, {
@@ -1258,27 +2608,33 @@
             }
         });
 
-        // Update Legend with RAW SCORES
+        saveHistoryEntry(resultKey, data, normalized, composition);
+
+        // Update Legend with composition ratios and intensity rates.
         document.getElementById('result-legend').innerHTML = `
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰 (A): Score ${scores.A}</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂 (B): Score ${scores.B}</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転 (C): Score ${scores.C}</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質 (D): Score ${scores.D}</div>
+            <div style="width:100%; text-align:center; color:var(--color-dim); font-size:0.78rem; margin-bottom:0.25rem;">円グラフ: 構成比 / 濃度: 各思想の最大値に対する反応率</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰 (A): 構成 ${composition.A.toFixed(1)}% / 濃度 ${normalized.A.toFixed(1)}%</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂 (B): 構成 ${composition.B.toFixed(1)}% / 濃度 ${normalized.B.toFixed(1)}%</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転 (C): 構成 ${composition.C.toFixed(1)}% / 濃度 ${normalized.C.toFixed(1)}%</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質 (D): 構成 ${composition.D.toFixed(1)}% / 濃度 ${normalized.D.toFixed(1)}%</div>
         `;
 
         // DOM Updates
-        document.getElementById('result-code').innerText = resultKey;
-        document.getElementById('result-code').style.color = data.color;
-        
+        document.getElementById('result-course').innerText = `COURSE: ${currentCourse.shareName} / ${getQuestionSetText()}`;
+        const readableResultColor = getReadableResultColor(data.color);
+        const resultCodeEl = document.getElementById('result-code');
+        resultCodeEl.innerText = resultKey === 'NEUTRAL' ? 'N' : resultKey;
+        resultCodeEl.style.color = readableResultColor;
+
         const rTitle = document.getElementById('result-title');
         const rQuote = document.getElementById('result-quote');
         const rDesc = document.getElementById('result-desc');
         const rCard = document.getElementById('result-card');
 
         rTitle.innerText = data.title;
-        rTitle.style.color = data.color;
-        rCard.style.borderLeftColor = data.color;
-        
+        rTitle.style.color = readableResultColor;
+        rCard.style.borderLeftColor = readableResultColor;
+
         rQuote.innerHTML = data.quote;
         rDesc.innerHTML = data.desc;
 
@@ -1288,14 +2644,22 @@
     function shareOnTwitter() {
         const title = document.getElementById('result-title').innerText;
         const quote = document.getElementById('result-quote').innerText;
-        
-        const text = `【思想診断システム】\n診断結果: ${title}\n${quote}\n\nあなたの思想を解析します。`;
-        const hashtags = "Mtps思想診断";
-        const url = "https://unknownthedeltia.github.io/mip";
+        const course = currentCourse.shareName || 'UNKNOWN COURSE';
 
-        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${hashtags}&url=${encodeURIComponent(url)}`;
-        
-        window.open(tweetUrl, '_blank');
+        const questionSet = getQuestionSetText();
+
+        const text = `【思想診断システム】\n受診コース: ${course}\n問題構成: ${questionSet}\n診断結果: ${title}\n${quote}\n\nあなたの思想を解析します。`;
+        const hashtags = "Mtps思想診断";
+        const url = "https://metalepsis-delta.com";
+
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}&url=${encodeURIComponent(url)}`;
+
+        window.open(tweetUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    function openHashtagResults() {
+        const hashtagUrl = "https://x.com/hashtag/Mtps%E6%80%9D%E6%83%B3%E8%A8%BA%E6%96%AD?src=hashtag_click";
+        window.open(hashtagUrl, '_blank', 'noopener,noreferrer');
     }
 
     function restartQuiz() {
