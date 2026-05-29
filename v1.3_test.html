@@ -112,6 +112,9 @@
         }
         const course = PUBLIC_STATS_COURSES[payload.courseId];
         const mainCode = String(payload.mainResult || 'N').trim() || 'N';
+        // Use nested map objects here. In setDoc(..., { merge: true }), a key like
+        // "mainResults.A_PLUS" would be saved as a literal root field, not as
+        // mainResults: { A_PLUS: ... }. Nested objects keep the UI and Firestore data aligned.
         const updateData = {
           mode: course.mode,
           courseId: payload.courseId,
@@ -120,22 +123,54 @@
           allPerAxis: course.allPerAxis,
           total: increment(1),
           updatedAt: serverTimestamp(),
-          [`mainResults.${encodeStatKey(mainCode)}`]: increment(1)
+          mainResults: {
+            [encodeStatKey(mainCode)]: increment(1)
+          }
         };
 
         if (course.mode === 'advance') {
           const advCode = String(payload.advanceResult || 'N').trim() || 'N';
-          updateData[`advanceResults.${encodeStatKey(advCode)}`] = increment(1);
-          updateData[`comboResults.${encodeStatKey(`${mainCode}/${advCode}`)}`] = increment(1);
+          updateData.advanceResults = {
+            [encodeStatKey(advCode)]: increment(1)
+          };
+          updateData.comboResults = {
+            [encodeStatKey(`${mainCode}/${advCode}`)]: increment(1)
+          };
         }
 
         await setDoc(doc(db, PUBLIC_STATS_COLLECTION, payload.courseId), updateData, { merge: true });
       }
 
+      function normalizePublicStatsDoc(data) {
+        const normalized = { ...data };
+        const buckets = ['mainResults', 'advanceResults', 'comboResults'];
+        buckets.forEach((bucket) => {
+          if (!normalized[bucket] || typeof normalized[bucket] !== 'object' || Array.isArray(normalized[bucket])) {
+            normalized[bucket] = {};
+          } else {
+            normalized[bucket] = { ...normalized[bucket] };
+          }
+        });
+
+        // Compatibility for v1.6.0 data that was accidentally saved as root fields like
+        // "mainResults.A_PLUS". This makes old counts visible without manual deletion.
+        Object.entries(data || {}).forEach(([field, value]) => {
+          const parts = field.split('.');
+          if (parts.length === 2 && buckets.includes(parts[0])) {
+            const count = Number(value || 0);
+            if (Number.isFinite(count)) {
+              normalized[parts[0]][parts[1]] = Number(normalized[parts[0]][parts[1]] || 0) + count;
+            }
+          }
+        });
+
+        return normalized;
+      }
+
       async function loadPublicStats() {
         const snap = await getDocs(collection(db, PUBLIC_STATS_COLLECTION));
         const stats = {};
-        snap.forEach((d) => { stats[d.id] = d.data(); });
+        snap.forEach((d) => { stats[d.id] = normalizePublicStatsDoc(d.data()); });
         return stats;
       }
 
@@ -1939,7 +1974,7 @@
 
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>IDEOLOGY PROFILER v1.6.0</h1>
+            <h1>IDEOLOGY PROFILER v1.6.1</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
