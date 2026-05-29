@@ -1,0 +1,4388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mtps思想診断ツール</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Firebase -->
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+      import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-analytics.js";
+      import {
+        getFirestore,
+        doc,
+        setDoc,
+        collection,
+        getDocs,
+        increment,
+        serverTimestamp
+      } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+
+      // Your web app's Firebase configuration
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+        apiKey: "AIzaSyAsljjKcOD0ZIuab4DRemhETjE0Oj1bQNc",
+        authDomain: "mtps-95319.firebaseapp.com",
+        projectId: "mtps-95319",
+        storageBucket: "mtps-95319.firebasestorage.app",
+        messagingSenderId: "190834159665",
+        appId: "1:190834159665:web:c0bd4668e8f52281726510",
+        measurementId: "G-YFJMSF58W9"
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      let analytics = null;
+      try {
+        if (await isSupported()) {
+          analytics = getAnalytics(app);
+        }
+      } catch (error) {
+        console.warn('Firebase Analytics is not available in this environment.', error);
+      }
+
+      const PUBLIC_STATS_COLLECTION = 'mtpsPublicStats';
+      const PUBLIC_STATS_COURSES = {
+        normal_standard: { mode: 'normal', label: 'Standard', questions: 24, allPerAxis: 6 },
+        normal_light: { mode: 'normal', label: 'Light Precision', questions: 48, allPerAxis: 12 },
+        normal_medium: { mode: 'normal', label: 'Medium Precision', questions: 72, allPerAxis: 18 },
+        normal_heavy: { mode: 'normal', label: 'Heavy Precision', questions: 100, allPerAxis: 25 },
+        normal_max: { mode: 'normal', label: 'Max Precision', questions: 200, allPerAxis: 50 },
+        advance_standard: { mode: 'advance', label: 'Advance Standard', questions: 40, allPerAxis: 5 },
+        advance_light: { mode: 'advance', label: 'Advance Light Precision', questions: 96, allPerAxis: 12 },
+        advance_medium: { mode: 'advance', label: 'Advance Medium Precision', questions: 144, allPerAxis: 18 },
+        advance_heavy: { mode: 'advance', label: 'Advance Heavy Precision', questions: 200, allPerAxis: 25 },
+        advance_max: { mode: 'advance', label: 'Advance Max Precision', questions: 400, allPerAxis: 50 }
+      };
+
+      // Firestore field names are kept ASCII-safe so result codes like A++, !A, ∅, and A++/EG never break dot-path updates.
+      const STAT_KEY_TO_CODE = {
+        A_PLUS_PLUS: 'A++', A_PLUS: 'A+', A_MINUS: 'A-',
+        B_PLUS_PLUS: 'B++', B_PLUS: 'B+', B_MINUS: 'B-',
+        C_PLUS_PLUS: 'C++', C_PLUS: 'C+', C_MINUS: 'C-',
+        D_PLUS_PLUS: 'D++', D_PLUS: 'D+', D_MINUS: 'D-',
+        NOT_A: '!A', NOT_B: '!B', NOT_C: '!C', NOT_D: '!D',
+        AB: 'AB', AC: 'AC', AD: 'AD', BC: 'BC', BD: 'BD', CD: 'CD',
+        AB_SHARP: 'AB#', AC_SHARP: 'AC#', AD_SHARP: 'AD#', BC_SHARP: 'BC#', BD_SHARP: 'BD#', CD_SHARP: 'CD#',
+        ABC: 'ABC', ABD: 'ABD', ACD: 'ACD', BCD: 'BCD',
+        N: 'N', N_PLUS: 'N+', N_MINUS: 'N-', EMPTY: '∅', NEUTRAL: 'N',
+        E: 'E', F: 'F', G: 'G', H: 'H',
+        E_PLUS_PLUS: 'E++', F_PLUS_PLUS: 'F++', G_PLUS_PLUS: 'G++', H_PLUS_PLUS: 'H++',
+        EG: 'EG', EH: 'EH', FG: 'FG', FH: 'FH', EF: 'EF', GH: 'GH'
+      };
+      const CODE_TO_STAT_KEY = Object.fromEntries(Object.entries(STAT_KEY_TO_CODE).map(([k, v]) => [v, k]));
+
+      function encodeStatKey(code) {
+        const normalized = String(code || 'N').trim() || 'N';
+        if (CODE_TO_STAT_KEY[normalized]) return CODE_TO_STAT_KEY[normalized];
+        return normalized
+          .replace(/∅/g, 'EMPTY')
+          .replace(/!/g, 'NOT_')
+          .replace(/\+/g, '_PLUS')
+          .replace(/#/g, '_SHARP')
+          .replace(/\//g, '__')
+          .replace(/[^A-Za-z0-9_]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '') || 'UNKNOWN';
+      }
+
+      function decodeStatKey(key) {
+        const safe = String(key || 'N');
+        if (STAT_KEY_TO_CODE[safe]) return STAT_KEY_TO_CODE[safe];
+        return safe
+          .replace(/__/g, '/')
+          .replace(/_SHARP/g, '#')
+          .replace(/_PLUS/g, '+')
+          .replace(/^NOT_/, '!')
+          .replace(/EMPTY/g, '∅');
+      }
+
+      async function submitPublicStats(payload) {
+        if (!payload || !payload.courseId || !PUBLIC_STATS_COURSES[payload.courseId]) {
+          throw new Error('Invalid public stats payload.');
+        }
+        const course = PUBLIC_STATS_COURSES[payload.courseId];
+        const mainCode = String(payload.mainResult || 'N').trim() || 'N';
+        const updateData = {
+          mode: course.mode,
+          courseId: payload.courseId,
+          courseName: course.label,
+          questions: course.questions,
+          allPerAxis: course.allPerAxis,
+          total: increment(1),
+          updatedAt: serverTimestamp(),
+          [`mainResults.${encodeStatKey(mainCode)}`]: increment(1)
+        };
+
+        if (course.mode === 'advance') {
+          const advCode = String(payload.advanceResult || 'N').trim() || 'N';
+          updateData[`advanceResults.${encodeStatKey(advCode)}`] = increment(1);
+          updateData[`comboResults.${encodeStatKey(`${mainCode}/${advCode}`)}`] = increment(1);
+        }
+
+        await setDoc(doc(db, PUBLIC_STATS_COLLECTION, payload.courseId), updateData, { merge: true });
+      }
+
+      async function loadPublicStats() {
+        const snap = await getDocs(collection(db, PUBLIC_STATS_COLLECTION));
+        const stats = {};
+        snap.forEach((d) => { stats[d.id] = d.data(); });
+        return stats;
+      }
+
+      // Make Firebase available to the non-module script below.
+      window.mtpsFirebase = {
+        app,
+        analytics,
+        db,
+        config: firebaseConfig,
+        publicStatsCourses: PUBLIC_STATS_COURSES,
+        submitPublicStats,
+        loadPublicStats,
+        encodeStatKey,
+        decodeStatKey
+      };
+    </script>
+
+    <style>
+        :root {
+            --color-bg: #050505;
+            --color-text: #e0e6ed;
+            --color-accent: #64ffda;
+            --color-dim: #4a5568;
+            
+            /* Type Colors */
+            --color-a: #ff4757; /* 回帰淘汰 Red */
+            --color-b: #2ed573; /* 共命包摂 Green */
+            --color-c: #1e90ff; /* 適応進転 Blue */
+            --color-d: #a4b0be; /* 無差総質 Gray */
+            --color-e: #ffb020; /* 境界固定 Orange */
+            --color-f: #c084fc; /* 境界流動 Purple */
+            --color-g: #f97316; /* 即応介入 Amber */
+            --color-h: #14b8a6; /* 観測保留 Teal */
+
+            --font-main: 'Noto Sans JP', sans-serif;
+            --font-mono: 'Share Tech Mono', monospace;
+
+            /* Default sizes (will be updated by JS) */
+            --container-width: 900px;
+            --btn-height: 60px;
+            --font-scale: 1;
+        }
+
+
+        body.theme-light {
+            --color-bg: #f4f7fb;
+            --color-text: #1f2937;
+            --color-accent: #00796f;
+            --color-dim: #64748b;
+            --color-a: #d7263d;
+            --color-b: #0f9f68;
+            --color-c: #1565c0;
+            --color-d: #54616f;
+            --color-e: #b45309;
+            --color-f: #7e22ce;
+            --color-g: #c2410c;
+            --color-h: #0f766e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Desktop Mode: Immersive (No Scroll) */
+        body.mode-desktop {
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Mobile Mode: Scrollable */
+        body.mode-mobile {
+            height: auto;
+            overflow-y: auto;
+            align-items: flex-start;
+            padding: 2rem 0;
+        }
+
+        /* Scanline effect */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .container {
+            width: 100%;
+            max-width: var(--container-width);
+            padding: 2rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: max-width 0.5s ease;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        body.mode-desktop .container {
+            height: 90vh;
+        }
+
+        body.mode-mobile .container {
+            height: auto;
+            min-height: 80vh;
+        }
+
+        /* --- Screens --- */
+        .screen {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            padding: 2rem; 
+        }
+
+        body.mode-desktop .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        body.mode-mobile .screen {
+            display: none;
+            position: relative;
+            height: auto;
+            min-height: 60vh;
+        }
+
+        .screen.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        body.mode-mobile .screen.active {
+            display: flex;
+        }
+
+
+        /* --- Typography & Buttons --- */
+        h1 {
+            font-family: var(--font-mono);
+            font-size: calc(2.5rem * var(--font-scale));
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-bottom: 1rem;
+            text-align: center;
+            color: var(--color-accent);
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);
+        }
+
+        .subtitle {
+            font-size: calc(1rem * var(--font-scale));
+            color: var(--color-dim);
+            margin-bottom: 3rem;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            background: transparent;
+            border: 1px solid var(--color-accent);
+            color: var(--color-accent);
+            padding: 1rem 3rem;
+            font-size: calc(1.2rem * var(--font-scale));
+            font-family: var(--font-mono);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 20px rgba(100, 255, 218, 0.4);
+        }
+        
+        .mode-select-grid {
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        .mode-btn {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: left;
+        }
+        .mode-btn:hover {
+            border-color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.1);
+        }
+
+        .mode-btn.danger {
+            border-color: rgba(255, 71, 87, 0.75);
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.16), rgba(0,0,0,0.35));
+            box-shadow: inset 0 0 18px rgba(255, 71, 87, 0.08), 0 0 18px rgba(255, 71, 87, 0.08);
+        }
+        .mode-btn.danger:hover {
+            border-color: var(--color-a);
+            background: rgba(255, 71, 87, 0.18);
+            box-shadow: 0 0 26px rgba(255, 71, 87, 0.25);
+        }
+        .mode-btn.danger .mode-info h3,
+        .mode-btn.danger .danger-mark {
+            color: var(--color-a);
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.35);
+        }
+        .mode-btn.danger .time-est {
+            color: #ff9aa4;
+        }
+        .mode-info h3 {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 1.2rem;
+            margin-bottom: 0.3rem;
+        }
+        .mode-info p {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .time-est {
+            font-size: 0.75rem;
+            color: var(--color-dim);
+            margin-top: 0.2rem;
+            font-family: var(--font-mono);
+        }
+
+        .btn-share {
+            border-color: #1DA1F2;
+            color: #1DA1F2;
+        }
+        .btn-share:hover {
+            background: #1DA1F2;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(29, 161, 242, 0.4);
+        }
+
+        .btn-hashtag {
+            border-color: #ff4f8b;
+            color: #ff4f8b;
+        }
+        .btn-hashtag:hover {
+            background: #ff4f8b;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 79, 139, 0.4);
+        }
+
+        .menu-action-box {
+            width: 100%;
+            margin-top: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 0.8rem;
+        }
+
+        .menu-button-row {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .menu-sub-button-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-database,
+        .btn-notice,
+        .btn-credit,
+        .btn-history {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            margin: 0.25rem;
+            font-family: var(--font-mono);
+        }
+
+        .btn-database {
+            min-width: 280px;
+            padding: 0.85rem 2.4rem;
+            font-size: 1.05rem;
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.08);
+            box-shadow: 0 0 18px rgba(100, 255, 218, 0.12), inset 0 0 18px rgba(100, 255, 218, 0.04);
+        }
+        .btn-database:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 26px rgba(100, 255, 218, 0.45);
+            transform: translateY(-1px);
+        }
+
+        .btn-notice,
+        .btn-credit,
+        .btn-history {
+            min-width: 135px;
+            font-size: 0.85rem;
+            padding: 0.45rem 1.2rem;
+            opacity: 0.95;
+        }
+
+        .btn-history {
+            border-color: #ffd166;
+            color: #ffd166;
+        }
+        .btn-history:hover {
+            background: #ffd166;
+            color: #111827;
+            box-shadow: 0 0 20px rgba(255, 209, 102, 0.35);
+        }
+
+        .btn-notice {
+            border-color: var(--color-a);
+            color: var(--color-a);
+        }
+        .btn-notice:hover {
+            background: var(--color-a);
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 71, 87, 0.35);
+        }
+
+        .btn-credit {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+        }
+        .btn-credit:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 20px rgba(100, 255, 218, 0.35);
+        }
+
+
+        .btn-theme {
+            min-width: 150px;
+            font-size: 0.85rem;
+            padding: 0.45rem 1.2rem;
+            border-color: #f7c948;
+            color: #f7c948;
+        }
+        .btn-theme:hover {
+            background: #f7c948;
+            color: #101820;
+            box-shadow: 0 0 20px rgba(247, 201, 72, 0.35);
+        }
+
+        body.theme-light .scanline {
+            background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0) 50%, rgba(0,0,0,0.025) 50%, rgba(0,0,0,0.025));
+            background-size: 100% 4px;
+        }
+        body.theme-light .container {
+            background: rgba(255, 255, 255, 0.82);
+            border-color: rgba(30, 41, 59, 0.14);
+            box-shadow: 0 20px 60px rgba(30, 55, 80, 0.16);
+        }
+        body.theme-light h1 {
+            text-shadow: 0 0 10px rgba(0, 121, 111, 0.18);
+        }
+        body.theme-light .mode-btn,
+        body.theme-light .device-card,
+        body.theme-light .option-btn,
+        body.theme-light .result-text-area,
+        body.theme-light .db-card,
+        body.theme-light .credit-row {
+            background: rgba(255, 255, 255, 0.72);
+            border-color: rgba(30, 41, 59, 0.16);
+        }
+        body.theme-light .mode-btn:hover,
+        body.theme-light .device-card:hover,
+        body.theme-light .option-btn:hover,
+        body.theme-light .db-card:hover {
+            background: rgba(0, 121, 111, 0.08);
+            border-color: var(--color-accent);
+        }
+        body.theme-light .mode-info p,
+        body.theme-light .db-short-desc,
+        body.theme-light .author-link-box,
+        body.theme-light .credit-role {
+            color: #64748b;
+        }
+        body.theme-light .progress-bar-bg {
+            background: #d9e2ec;
+        }
+        body.theme-light .chart-overlay {
+            background: #ffffff;
+            border: 1px solid rgba(30, 41, 59, 0.12);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.65);
+        }
+        #result-code {
+            text-shadow: 0 2px 10px rgba(0,0,0,0.45);
+        }
+        #result-title {
+            text-shadow: 0 1px 8px rgba(0,0,0,0.25);
+        }
+        body.theme-light #result-code,
+        body.theme-light #result-title {
+            text-shadow: none;
+        }
+        body.theme-light .chart-overlay span:first-child {
+            color: #475569 !important;
+        }
+        body.theme-light .credit-box {
+            background: rgba(255,255,255,0.78);
+            border-color: rgba(0, 121, 111, 0.45);
+        }
+        body.theme-light .warning-box {
+            background: rgba(215, 38, 61, 0.07);
+        }
+        body.theme-light .btn-database {
+            background: rgba(0, 121, 111, 0.08);
+            box-shadow: 0 0 18px rgba(0, 121, 111, 0.10), inset 0 0 18px rgba(0, 121, 111, 0.04);
+        }
+        body.theme-light .mode-btn.danger {
+            background: linear-gradient(90deg, rgba(215, 38, 61, 0.12), rgba(255,255,255,0.72));
+        }
+        body.theme-light .result-text-area {
+            border-left-color: rgba(30, 41, 59, 0.35);
+        }
+        body.theme-light ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        body.theme-light ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+        }
+
+        /* Light mode: make DATABASE text readable on bright backgrounds */
+        body.theme-light .db-container {
+            background: linear-gradient(180deg, rgba(0, 121, 111, 0.055), rgba(255, 255, 255, 0.72));
+        }
+        body.theme-light .db-section {
+            border-bottom-color: rgba(15, 23, 42, 0.16);
+        }
+        body.theme-light .db-h2 {
+            color: #0f172a;
+            background: rgba(0, 121, 111, 0.10);
+            text-shadow: none;
+        }
+        body.theme-light .db-card h3,
+        body.theme-light .db-card h4 {
+            color: #0f172a;
+        }
+        body.theme-light .db-card p,
+        body.theme-light .db-card strong,
+        body.theme-light .db-details {
+            color: #1f2937;
+        }
+        body.theme-light .db-short-desc {
+            color: #475569;
+        }
+        body.theme-light .db-card.active .db-details {
+            border-top-color: rgba(15, 23, 42, 0.16);
+        }
+        body.theme-light .db-detail-quote {
+            color: #475569 !important;
+            border-bottom-color: rgba(15, 23, 42, 0.18) !important;
+        }
+        body.theme-light .db-detail-desc {
+            color: #1f2937 !important;
+        }
+        .db-group-title {
+            margin: 1.5rem 0 1rem;
+            color: var(--color-text);
+            border-bottom: 1px solid rgba(255,255,255,0.18);
+            padding-bottom: 0.5rem;
+        }
+        body.theme-light .db-group-title {
+            color: #0f172a;
+            border-bottom-color: rgba(15, 23, 42, 0.18);
+        }
+        body.theme-light .logic-detail-box {
+            background: rgba(0, 121, 111, 0.08);
+            border-color: rgba(0, 121, 111, 0.28);
+        }
+        body.theme-light .logic-detail-box li {
+            color: #334155;
+        }
+        body.theme-light .logic-note {
+            color: #475569;
+            border-top-color: rgba(15, 23, 42, 0.16);
+        }
+
+        .author-link-box {
+            width: 100%;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: var(--color-dim);
+            font-family: var(--font-mono);
+            letter-spacing: 0.08em;
+            text-align: center;
+        }
+        .author-link-box a {
+            color: var(--color-accent);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.35);
+            transition: 0.3s;
+        }
+        .author-link-box a:hover {
+            color: #ffffff;
+            border-bottom-color: #ffffff;
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.45);
+        }
+
+        .credit-box {
+            background: rgba(100, 255, 218, 0.04);
+            border: 1px solid rgba(100, 255, 218, 0.55);
+            padding: 2rem;
+            max-width: 720px;
+            width: 100%;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        .credit-box h3 {
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.25);
+            padding-bottom: 0.5rem;
+            letter-spacing: 0.08em;
+        }
+        .credit-list {
+            display: grid;
+            gap: 1rem;
+        }
+        .credit-row {
+            display: grid;
+            grid-template-columns: minmax(180px, 0.8fr) 1.2fr;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.03);
+            border-left: 3px solid var(--color-accent);
+        }
+        .credit-role {
+            color: var(--color-dim);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .credit-name {
+            color: var(--color-text);
+            font-weight: 700;
+            line-height: 1.6;
+        }
+        .credit-name a {
+            color: var(--color-accent);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.35);
+        }
+        .credit-name a:hover {
+            color: #ffffff;
+            border-bottom-color: #ffffff;
+        }
+        body.mode-mobile .credit-row {
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
+        }
+
+        /* --- Warning Screen Styles --- */
+        .warning-box {
+            background: rgba(255, 71, 87, 0.05); /* Red tint */
+            border: 1px solid var(--color-a);
+            padding: 2rem;
+            max-width: 700px;
+            width: 100%;
+            margin-bottom: 2rem;
+            text-align: left;
+        }
+        
+        .warning-box h3 {
+            color: var(--color-a);
+            font-family: var(--font-mono);
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255, 71, 87, 0.3);
+            padding-bottom: 0.5rem;
+        }
+
+        .warning-box ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .warning-box li {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            position: relative;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .warning-box li::before {
+            content: "!";
+            position: absolute;
+            left: 0;
+            color: var(--color-a);
+            font-weight: bold;
+            font-family: var(--font-mono);
+        }
+
+        /* --- Device Selection --- */
+        .device-grid {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+        .device-card {
+            border: 1px solid var(--color-dim);
+            padding: 2rem;
+            cursor: pointer;
+            transition: 0.3s;
+            text-align: center;
+        }
+        .device-card:hover {
+            border-color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.05);
+        }
+        .device-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        /* --- Quiz Layout --- */
+        .progress-container {
+            width: 100%;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        body.mode-desktop .progress-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 1rem 2rem;
+            margin-bottom: 0;
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 4px;
+            background: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--color-accent);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--color-accent);
+        }
+
+        .question-box {
+            text-align: center;
+            margin-bottom: 2rem;
+            width: 100%;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .question-text {
+            font-size: calc(1.4rem * var(--font-scale));
+            font-weight: 700;
+            line-height: 1.6;
+        }
+
+        .options-grid {
+            display: grid;
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+        
+        body.mode-desktop .options-grid {
+            grid-template-columns: repeat(5, 1fr);
+        }
+        body.mode-mobile .options-grid {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .option-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--color-text);
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: var(--btn-height);
+        }
+        
+        body.mode-mobile .option-btn {
+            flex-direction: row;
+            justify-content: flex-start;
+            padding-left: 1.5rem;
+            gap: 1rem;
+            text-align: left;
+        }
+
+        .option-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--color-accent);
+        }
+
+        /* --- Result --- */
+        .result-content {
+            display: grid;
+            gap: 2rem;
+            align-items: center;
+            width: 100%;
+        }
+        
+        body.mode-desktop .result-content {
+            grid-template-columns: 1fr 1.2fr;
+            padding: 2rem;
+            height: 100%;
+            overflow-y: auto;
+        }
+        body.mode-mobile .result-content {
+            grid-template-columns: 1fr;
+            align-content: start;
+        }
+
+        .chart-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #333 0% 100%);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            margin-bottom: 1rem;
+        }
+        
+        .chart-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 70%;
+            height: 70%;
+            background: var(--color-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 2;
+        }
+
+        .result-text-area {
+            padding: 1.5rem;
+            background: rgba(255,255,255,0.03);
+            border-left: 4px solid var(--color-dim);
+            text-align: left;
+        }
+
+        body.mode-desktop .result-text-area {
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        body.mode-mobile .result-text-area {
+            overflow-y: visible;
+            height: auto;
+            max-height: none;
+        }
+
+        .legend {
+            display: flex;
+            gap: 0.8rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-color { width: 8px; height: 8px; border-radius: 50%; }
+
+        /* --- History Screen Styles --- */
+        .history-box {
+            width: 100%;
+            max-width: 900px;
+            height: 100%;
+            overflow-y: auto;
+            padding: 1rem;
+            text-align: left;
+        }
+
+        .history-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .history-actions {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
+        .history-list {
+            display: grid;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .history-card {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-left: 4px solid var(--color-accent);
+            padding: 1.2rem;
+        }
+
+        .history-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.9rem;
+        }
+
+        .history-result-code {
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+
+        .history-result-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-top: 0.2rem;
+            line-height: 1.5;
+        }
+
+        .history-date {
+            color: var(--color-dim);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            text-align: right;
+            line-height: 1.5;
+        }
+
+        .history-course {
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            margin-bottom: 0.8rem;
+            line-height: 1.5;
+        }
+
+        .history-score-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+
+        body.mode-mobile .history-score-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .history-score-item {
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.07);
+            padding: 0.7rem;
+            text-align: center;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+        }
+
+        .history-score-item strong {
+            display: block;
+            font-size: 1rem;
+            margin-top: 0.25rem;
+            color: var(--color-text);
+        }
+
+        .history-empty {
+            text-align: center;
+            color: var(--color-dim);
+            border: 1px dashed rgba(255,255,255,0.18);
+            padding: 2rem;
+            line-height: 1.8;
+        }
+
+        body.theme-light .history-card {
+            background: rgba(255,255,255,0.82);
+            border-color: rgba(15,23,42,0.14);
+        }
+        body.theme-light .history-score-item {
+            background: rgba(15,23,42,0.04);
+            border-color: rgba(15,23,42,0.12);
+        }
+        body.theme-light .history-empty {
+            border-color: rgba(15,23,42,0.18);
+        }
+
+        /* --- Database Screen Styles --- */
+        .db-container {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 1rem;
+            text-align: left;
+            background: linear-gradient(180deg, rgba(100, 255, 218, 0.025), rgba(255, 255, 255, 0.01));
+            border-radius: 0.6rem;
+        }
+        
+        .db-section {
+            margin-bottom: 3rem;
+            border-bottom: 1px solid rgba(100, 255, 218, 0.18);
+            padding-bottom: 2rem;
+        }
+        
+        .db-h2 {
+            font-family: var(--font-mono);
+            color: #f5fffc;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.65rem 0.9rem;
+            border-left: 4px solid var(--color-accent);
+            background: rgba(100, 255, 218, 0.08);
+            text-shadow: 0 0 10px rgba(100, 255, 218, 0.22);
+        }
+
+        .db-card {
+            background: rgba(255,255,255,0.065);
+            border: 1px solid rgba(255,255,255,0.14);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid #777;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+        }
+        
+        .db-card:hover {
+            background: rgba(100, 255, 218, 0.09);
+            border-color: rgba(100, 255, 218, 0.35);
+            transform: translateX(5px);
+        }
+        
+        .db-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #f5f7fa;
+        }
+
+        .db-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.3rem;
+            color: #f5f7fa;
+        }
+
+        .db-short-desc {
+            font-size: 0.82rem; 
+            color: #cbd5e1;
+            display: block;
+            margin-top: 0.35rem;
+            line-height: 1.6;
+        }
+
+        .db-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            opacity: 0;
+        }
+
+        .db-card.active .db-details {
+            max-height: 500px; /* Limit expansion */
+            opacity: 1;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            transition: max-height 0.5s ease-in, opacity 0.5s ease-in;
+        }
+
+        .db-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+
+        .logic-detail-box {
+            margin-top: 1.2rem;
+            margin-bottom: 1.2rem;
+            padding: 1.2rem;
+            background: rgba(100, 255, 218, 0.055);
+            border: 1px solid rgba(100, 255, 218, 0.25);
+            border-left: 4px solid var(--color-accent);
+        }
+
+        .logic-detail-box h3 {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 1rem;
+            margin-bottom: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+
+        .logic-detail-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .logic-detail-box li {
+            margin-bottom: 0.65rem;
+            padding-left: 1.1rem;
+            position: relative;
+            color: #d8e2ea;
+        }
+
+        .logic-detail-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+        }
+
+        .logic-note {
+            margin-top: 0.9rem;
+            padding-top: 0.8rem;
+            border-top: 1px solid rgba(255,255,255,0.12);
+            color: #b9c7d2;
+            font-size: 0.85rem;
+        }
+
+
+        /* --- Public Stats Screen --- */
+        .stats-box {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 1rem;
+            text-align: left;
+        }
+        .stats-toolbar {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1rem 0 1.5rem;
+        }
+        .stats-course-card {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-left: 4px solid var(--color-accent);
+            padding: 1.1rem;
+            margin-bottom: 1rem;
+            border-radius: 10px;
+        }
+        body.theme-light .stats-course-card {
+            background: rgba(255,255,255,0.82);
+            border-color: rgba(15,23,42,0.14);
+            box-shadow: 0 8px 20px rgba(15,23,42,0.06);
+        }
+        .stats-course-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            margin-bottom: 0.8rem;
+        }
+        .stats-course-title {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 1.05rem;
+            letter-spacing: 0.04em;
+        }
+        .stats-total {
+            color: var(--color-text);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .stats-section-title {
+            color: var(--color-text);
+            font-weight: 700;
+            margin: 0.8rem 0 0.5rem;
+            font-size: 0.9rem;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 0.45rem;
+        }
+        .stats-chip {
+            background: rgba(255,255,255,0.045);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 0.55rem 0.6rem;
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+        body.theme-light .stats-chip {
+            background: rgba(15,23,42,0.035);
+            border-color: rgba(15,23,42,0.12);
+        }
+        .stats-chip strong {
+            display: block;
+            color: var(--color-text);
+            font-size: 0.9rem;
+        }
+        .stats-chip span {
+            color: var(--color-dim);
+        }
+        .stats-empty, .stats-error, .stats-loading {
+            text-align: center;
+            color: var(--color-dim);
+            line-height: 1.8;
+            padding: 2rem 1rem;
+            border: 1px dashed rgba(148,163,184,0.35);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.03);
+        }
+        body.theme-light .stats-empty,
+        body.theme-light .stats-error,
+        body.theme-light .stats-loading {
+            background: rgba(15,23,42,0.035);
+            border-color: rgba(15,23,42,0.18);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0b10;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--color-accent);
+        }
+
+
+        /* --- Advance Mode --- */
+        .advance-section-title {
+            width: 100%;
+            max-width: 600px;
+            margin: 2rem auto 0.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255,255,255,0.12);
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            letter-spacing: 0.12em;
+            text-align: center;
+        }
+        body.theme-light .advance-section-title { border-top-color: rgba(15,23,42,0.14); }
+        .mode-btn.advance { border-color: rgba(255,176,32,0.55); }
+        .mode-btn.advance:hover { border-color: var(--color-e); background: rgba(255,176,32,0.10); }
+        .mode-btn.advance .mode-info h3 { color: var(--color-e); }
+        .advance-visuals {
+            width: 100%;
+            display: none;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .advance-visuals.active { display: grid; }
+        .mini-chart-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+        .mini-chart-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 1rem;
+            text-align: center;
+        }
+        body.theme-light .mini-chart-card {
+            background: rgba(255,255,255,0.9);
+            border-color: rgba(15,23,42,0.12);
+        }
+        .mini-chart-title {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+        }
+        .mini-pie {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            margin: 0 auto 0.75rem;
+            background: conic-gradient(from 0deg, #333 0% 100%);
+            box-shadow: 0 0 25px rgba(0,0,0,0.24);
+        }
+        .mini-pie::after {
+            content: attr(data-code);
+            position: absolute;
+            inset: 24%;
+            border-radius: 50%;
+            background: var(--color-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            font-size: 1.25rem;
+            color: var(--color-text);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        body.theme-light .mini-pie::after { border-color: rgba(15,23,42,0.12); }
+        .advance-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            text-align: left;
+            font-size: 0.76rem;
+            line-height: 1.45;
+        }
+        .advance-legend-row { display: flex; gap: 0.4rem; align-items: flex-start; }
+        .advance-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 0.28rem; flex: 0 0 auto; }
+        .radar-wrap { width: 100%; overflow-x: auto; }
+        #radar-chart { max-width: 100%; height: auto; }
+        .advance-result-box {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.025);
+            border-radius: 14px;
+            line-height: 1.75;
+        }
+        body.theme-light .advance-result-box {
+            border-color: rgba(15,23,42,0.12);
+            background: rgba(255,255,255,0.88);
+            color: #1f2937;
+        }
+        .advance-result-code {
+            font-family: var(--font-mono);
+            color: var(--color-e);
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 0.35rem;
+        }
+
+
+        /* --- Result Layout Refresh v1.5.2 --- */
+        #result-screen .screen-title-spacer { display: none; }
+        .result-content {
+            align-items: stretch;
+        }
+        .chart-wrapper,
+        .result-text-area {
+            min-width: 0;
+        }
+        .result-text-area {
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-left-width: 4px;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.22);
+        }
+        body.theme-light .result-text-area {
+            background: rgba(255,255,255,0.92);
+            border-color: rgba(15,23,42,0.12);
+            box-shadow: 0 18px 45px rgba(15,23,42,0.10);
+        }
+        #result-code {
+            max-width: 90%;
+            text-align: center;
+            line-height: 1;
+            overflow-wrap: anywhere;
+            font-size: clamp(1.55rem, 4.2vw, 2.5rem) !important;
+        }
+        .chart-overlay span:first-child {
+            letter-spacing: 0.14em;
+        }
+        #result-legend {
+            width: 100%;
+            max-width: 780px;
+        }
+        #result-legend .legend-note {
+            width: 100%;
+            text-align: center;
+            color: var(--color-dim);
+            font-size: 0.78rem;
+            margin-bottom: 0.25rem;
+            line-height: 1.5;
+        }
+        #result-legend .legend-item {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 0.55rem 0.65rem;
+            line-height: 1.45;
+            align-items: flex-start;
+        }
+        body.theme-light #result-legend .legend-item {
+            background: rgba(255,255,255,0.86);
+            border-color: rgba(15,23,42,0.12);
+            color: #1f2937;
+        }
+        .legend-color { margin-top: 0.28rem; flex: 0 0 auto; }
+        #result-course {
+            display: inline-block;
+            padding: 0.35rem 0.55rem;
+            border: 1px solid rgba(100,255,218,0.20);
+            border-radius: 999px;
+            background: rgba(100,255,218,0.05);
+        }
+        body.theme-light #result-course {
+            background: rgba(0,112,96,0.06);
+            border-color: rgba(0,112,96,0.16);
+        }
+
+        #result-screen.advance-result-mode .result-content {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            align-content: start;
+            align-items: stretch;
+            width: 100%;
+        }
+        body.mode-desktop #result-screen.advance-result-mode .result-content {
+            padding: 1rem 1.25rem;
+            height: 100%;
+            overflow-y: auto;
+        }
+        #result-screen.advance-result-mode .chart-wrapper {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(220px, 300px) 1fr;
+            grid-template-areas:
+                "mainpie mainlegend"
+                "advance advance";
+            gap: 1rem;
+            align-items: center;
+            justify-items: center;
+            padding: 1rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 18px;
+            background: rgba(255,255,255,0.025);
+        }
+        body.theme-light #result-screen.advance-result-mode .chart-wrapper {
+            background: rgba(255,255,255,0.82);
+            border-color: rgba(15,23,42,0.12);
+            box-shadow: 0 18px 45px rgba(15,23,42,0.08);
+        }
+        #result-screen.advance-result-mode #pie-chart {
+            grid-area: mainpie;
+            width: min(260px, 72vw);
+            height: min(260px, 72vw);
+            margin: 0;
+        }
+        #result-screen.advance-result-mode #result-legend {
+            grid-area: mainlegend;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+            gap: 0.6rem;
+            max-width: none;
+            justify-content: stretch;
+            font-size: 0.78rem;
+        }
+        #result-screen.advance-result-mode #result-legend .legend-note {
+            grid-column: 1 / -1;
+            text-align: left;
+            margin-bottom: 0;
+            padding: 0.2rem 0;
+        }
+        #result-screen.advance-result-mode .advance-visuals {
+            grid-area: advance;
+            width: 100%;
+            margin-top: 0.25rem;
+        }
+        #result-screen.advance-result-mode .mini-chart-grid {
+            grid-template-columns: repeat(3, minmax(210px, 1fr));
+            gap: 0.85rem;
+        }
+        #result-screen.advance-result-mode .mini-chart-card {
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #result-screen.advance-result-mode .mini-pie {
+            width: 150px;
+            height: 150px;
+        }
+        #result-screen.advance-result-mode .mini-pie::after {
+            font-size: 1.05rem;
+        }
+        #result-screen.advance-result-mode .advance-legend {
+            font-size: 0.73rem;
+        }
+        #result-screen.advance-result-mode #radar-chart {
+            width: 220px;
+            height: 220px;
+            margin: 0 auto;
+        }
+        #result-screen.advance-result-mode .result-text-area {
+            max-height: none;
+            overflow: visible;
+        }
+        #advance-result-box {
+            border-left: 4px solid var(--color-e);
+        }
+
+        @media (max-width: 760px) {
+            #result-screen.advance-result-mode .chart-wrapper {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "mainpie"
+                    "mainlegend"
+                    "advance";
+                padding: 0.85rem;
+            }
+            #result-screen.advance-result-mode #result-legend {
+                grid-template-columns: 1fr;
+            }
+            #result-screen.advance-result-mode .mini-chart-grid {
+                grid-template-columns: 1fr;
+            }
+            #result-screen.advance-result-mode #pie-chart {
+                width: min(250px, 72vw);
+                height: min(250px, 72vw);
+            }
+        }
+
+
+        /* --- Course Mode Switcher --- */
+        .course-mode-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto 1.25rem;
+            flex-wrap: wrap;
+        }
+        .course-tab-btn {
+            flex: 1 1 220px;
+            border: 1px solid rgba(255,255,255,0.16);
+            background: rgba(255,255,255,0.035);
+            color: var(--color-dim);
+            padding: 0.85rem 1rem;
+            font-family: var(--font-mono);
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: 0.25s ease;
+            border-radius: 10px;
+        }
+        .course-tab-btn:hover {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+            background: rgba(100,255,218,0.08);
+        }
+        .course-tab-btn.active {
+            border-color: var(--color-accent);
+            color: var(--color-bg);
+            background: var(--color-accent);
+            box-shadow: 0 0 18px rgba(100,255,218,0.28);
+        }
+        .course-tab-btn.advance-tab.active {
+            border-color: var(--color-e);
+            background: var(--color-e);
+            box-shadow: 0 0 18px rgba(255,176,32,0.30);
+        }
+        body.theme-light .course-tab-btn {
+            border-color: rgba(15,23,42,0.16);
+            background: rgba(255,255,255,0.82);
+            color: #475569;
+        }
+        body.theme-light .course-tab-btn.active { color: #03140f; }
+        .course-panel {
+            display: none;
+            width: 100%;
+            animation: coursePanelFade 0.25s ease;
+        }
+        .course-panel.active { display: block; }
+        @keyframes coursePanelFade {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .course-panel-note {
+            width: 100%;
+            max-width: 620px;
+            margin: 0 auto 0.9rem;
+            color: var(--color-dim);
+            text-align: center;
+            font-size: 0.82rem;
+            line-height: 1.7;
+        }
+
+
+        /* --- Centering fixes for course buttons --- */
+        .course-panel.active {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .course-panel .mode-select-grid {
+            width: min(100%, 620px);
+            max-width: 620px;
+            margin-left: auto;
+            margin-right: auto;
+            justify-items: stretch;
+        }
+
+        .course-panel .mode-btn {
+            width: 100%;
+            min-height: 86px;
+        }
+
+        .course-mode-tabs {
+            width: min(100%, 620px);
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .course-tab-btn {
+            text-align: center;
+        }
+
+        body.mode-mobile .course-panel .mode-select-grid,
+        body.mode-mobile .course-mode-tabs {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        body.mode-mobile .course-tab-btn {
+            flex-basis: 100%;
+        }
+
+        .advance-max-warning-box {
+            background: rgba(255, 176, 32, 0.08);
+            border-color: var(--color-e);
+        }
+        .advance-max-warning-box h3 {
+            color: var(--color-e);
+            border-bottom-color: rgba(255,176,32,0.34);
+        }
+        .advance-max-warning-box li::before { color: var(--color-e); }
+
+
+    
+
+        /* --- Text cutoff / viewport overflow fixes (v1.5.4) --- */
+        /* --- Database Advance Axis result list update (v1.5.5) --- */
+        /* --- Short Advance share text (v1.5.7) --- */
+        body.mode-desktop {
+            height: auto;
+            min-height: 100vh;
+            overflow-y: auto;
+            align-items: flex-start;
+            padding: 1rem 0;
+        }
+
+        body.mode-desktop .container {
+            height: auto;
+            min-height: calc(100vh - 2rem);
+        }
+
+        /* The menu can become taller than the viewport, especially after Advance was added.
+           Keep it top-aligned and scrollable instead of vertically centering it into a crop. */
+        body.mode-desktop #intro-screen {
+            justify-content: flex-start;
+            overflow-y: auto;
+            padding-top: clamp(1rem, 2.4vh, 2rem);
+            padding-bottom: 2rem;
+        }
+
+        body.mode-desktop #intro-screen h1 {
+            font-size: clamp(1.65rem, 3.2vw, calc(2.5rem * var(--font-scale)));
+            line-height: 1.25;
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        body.mode-desktop #intro-screen .subtitle {
+            margin-bottom: 1.5rem;
+        }
+
+        body.mode-desktop .course-mode-tabs,
+        body.mode-desktop .course-panel .mode-select-grid {
+            width: min(100%, 620px);
+        }
+
+        body.mode-desktop .course-panel .mode-btn {
+            min-height: 76px;
+            padding: 1.15rem 1.5rem;
+        }
+
+        body.mode-desktop .mode-info h3 {
+            line-height: 1.25;
+        }
+
+        body.mode-desktop .mode-info p,
+        body.mode-desktop .time-est {
+            line-height: 1.55;
+        }
+
+        body.mode-desktop .menu-action-box {
+            margin-top: 1.4rem;
+            padding-bottom: 0.5rem;
+        }
+
+        @media (max-height: 820px) {
+            body.mode-desktop {
+                padding: 0.5rem 0;
+            }
+            body.mode-desktop .container {
+                min-height: calc(100vh - 1rem);
+            }
+            body.mode-desktop #intro-screen {
+                padding-top: 0.8rem;
+                padding-bottom: 1.2rem;
+            }
+            body.mode-desktop #intro-screen h1 {
+                font-size: clamp(1.35rem, 2.6vw, 2rem);
+                letter-spacing: 0.16em;
+                margin-bottom: 0.5rem;
+            }
+            body.mode-desktop #intro-screen .subtitle {
+                margin-bottom: 1rem;
+            }
+            body.mode-desktop .course-panel-note {
+                margin-bottom: 0.6rem;
+                line-height: 1.55;
+            }
+            body.mode-desktop .course-panel .mode-select-grid {
+                gap: 0.75rem;
+            }
+            body.mode-desktop .course-panel .mode-btn {
+                min-height: 70px;
+                padding: 0.95rem 1.35rem;
+            }
+            body.mode-desktop .menu-action-box {
+                margin-top: 1rem;
+                gap: 0.55rem;
+            }
+        }
+
+        @media (max-height: 700px) {
+            body.mode-desktop #intro-screen h1 {
+                font-size: clamp(1.15rem, 2.2vw, 1.65rem);
+            }
+            body.mode-desktop .course-panel .mode-btn {
+                min-height: 64px;
+                padding: 0.75rem 1.2rem;
+            }
+            body.mode-desktop .mode-info h3 {
+                font-size: 1rem;
+                margin-bottom: 0.15rem;
+            }
+            body.mode-desktop .mode-info p {
+                font-size: 0.74rem;
+            }
+            body.mode-desktop .time-est {
+                font-size: 0.7rem;
+            }
+        }
+
+    </style>
+</head>
+<body class="mode-desktop theme-dark">
+
+    <div class="scanline"></div>
+
+    <div class="container" id="main-container">
+        
+        <!-- Screen 0: Device Selection -->
+        <div id="device-screen" class="screen active">
+            <h1>SYSTEM BOOT</h1>
+            <p class="subtitle">SELECT INTERFACE MODE</p>
+            
+            <div class="device-grid">
+                <div class="device-card" onclick="setMode('desktop')">
+                    <span class="device-icon">💻</span>
+                    <div style="font-family: var(--font-mono); font-size: 1.2rem;">DESKTOP</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">広域表示 / マウス操作</div>
+                </div>
+                <div class="device-card" onclick="setMode('mobile')">
+                    <span class="device-icon">📱</span>
+                    <div style="font-family: var(--font-mono); font-size: 1.2rem;">MOBILE</div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">縦長表示 / タッチ操作</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 0.5: Course Warning / MAX PRECISION only -->
+        <div id="warning-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-a); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);">MAX WARNING</h1>
+            <div class="warning-box">
+                <h3>最精密思想診断 / 200 QUESTION NOTICE</h3>
+                <ul>
+                    <li>このコースは200問の長時間精密モードです。A/B/C/Dの4観点を各50問ずつ測定します。</li>
+                    <li>通常MAXではA/B/C/Dを均等に扱い、通常モード内で最も精密に判定します。</li>
+                    <li>質問には強い表現や極端な価値観を扱うものがあります。診断結果は絶対的な評価ではなく、エンターテインメントとして扱ってください。</li>
+                    <li>長時間になるため、疲れた場合は無理に続けず休憩してください。</li>
+                </ul>
+            </div>
+            <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+                <button class="btn" onclick="hideCourseWarning()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK</button>
+                <button class="btn" onclick="confirmCourseWarning()" style="border-color: var(--color-a); color: var(--color-a);">AGREE & START</button>
+            </div>
+        </div>
+
+        <!-- Screen 0.6: Advance MAX 400 Warning -->
+        <div id="advance-max-warning-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-e); text-shadow: 0 0 10px rgba(255, 176, 32, 0.35);">ADVANCE MAX WARNING</h1>
+            <div class="warning-box advance-max-warning-box">
+                <h3>Advance Max Precision / 400 QUESTION NOTICE</h3>
+                <ul>
+                    <li>このコースは400問の超長時間モードです。A〜Hの8観点を各50問ずつ測定します。</li>
+                    <li>Main Ideology、Advance Axis、A〜Hレーダーチャートをすべて出すため、通常モードより情報量が多くなります。</li>
+                    <li>回答時間の目安は60〜120分です。途中で疲れた場合は無理に続けないでください。</li>
+                    <li>質問には極端な価値観や強い表現が含まれます。結果は絶対的評価ではなく、エンターテインメントとして扱ってください。</li>
+                    <li>長時間の回答になるため、集中できる環境で行うことを推奨します。</li>
+                </ul>
+            </div>
+            <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+                <button class="btn" onclick="hideCourseWarning()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK</button>
+                <button class="btn" onclick="confirmCourseWarning()" style="border-color: var(--color-e); color: var(--color-e);">AGREE & START</button>
+            </div>
+        </div>
+
+        <!-- Screen 1: Intro (Mode Selection) -->
+        <div id="intro-screen" class="screen">
+            <h1>IDEOLOGY PROFILER v1.6.0</h1>
+            <p class="subtitle">
+                診断モードを選択してください。
+            </p>
+            
+            <div class="course-mode-tabs" role="tablist" aria-label="診断種別の切り替え">
+                <button id="normal-tab-btn" class="course-tab-btn active" onclick="setCoursePanel('normal')" type="button">NORMAL MODE</button>
+                <button id="advance-tab-btn" class="course-tab-btn advance-tab" onclick="setCoursePanel('advance')" type="button">ADVANCE MODE</button>
+            </div>
+
+            <div id="normal-course-panel" class="course-panel active">
+                <p class="course-panel-note">A/B/C/Dの4観点で診断します。まずはこちらが基本モードです。</p>
+                <div class="mode-select-grid">
+                    <div class="mode-btn" onclick="startQuiz(24)">
+                        <div class="mode-info">
+                            <h3>STANDARD</h3>
+                            <p>一般思想診断 / 24問 / ALL:6 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 3~8分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn" onclick="startQuiz(48)">
+                        <div class="mode-info">
+                            <h3>LIGHT PRECISION</h3>
+                            <p>軽精密思想診断 / 48問 / ALL:12 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 8~15分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn" onclick="startQuiz(72)">
+                        <div class="mode-info">
+                            <h3>MEDIUM PRECISION</h3>
+                            <p>中精密思想診断 / 72問 / ALL:18 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 12~25分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn" onclick="startQuiz(100)">
+                        <div class="mode-info">
+                            <h3>HEAVY PRECISION</h3>
+                            <p>重精密思想診断 / 100問 / ALL:25 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 15~30分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn danger" onclick="showCourseWarning(200)">
+                        <div class="mode-info">
+                            <h3>MAX PRECISION</h3>
+                            <p>最精密思想診断 / 200問 / ALL:50 / 全問バランス補正</p>
+                            <p class="time-est">目安時間: 30~60分</p>
+                        </div>
+                        <span class="danger-mark" style="font-family: var(--font-mono);">!!</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="advance-course-panel" class="course-panel">
+                <div class="advance-section-title" style="margin-top:0;">ADVANCE / A〜H 8観点診断</div>
+                <p class="course-panel-note">A〜DのMain Ideologyに加えて、E〜HのAdvance Axisも測定します。結果には補助軸とレーダーチャートが追加されます。</p>
+                <div class="mode-select-grid">
+                    <div class="mode-btn advance" onclick="startQuiz(40)">
+                        <div class="mode-info">
+                            <h3>ADVANCE STANDARD</h3>
+                            <p>8観点診断 / 40問 / ALL:5</p>
+                            <p class="time-est">目安時間: 5~12分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
+                    </div>
+                    <div class="mode-btn advance" onclick="startQuiz(96)">
+                        <div class="mode-info">
+                            <h3>ADVANCE LIGHT PRECISION</h3>
+                            <p>8観点診断 / 96問 / ALL:12</p>
+                            <p class="time-est">目安時間: 15~30分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
+                    </div>
+                    <div class="mode-btn advance" onclick="startQuiz(144)">
+                        <div class="mode-info">
+                            <h3>ADVANCE MEDIUM PRECISION</h3>
+                            <p>8観点診断 / 144問 / ALL:18</p>
+                            <p class="time-est">目安時間: 25~45分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
+                    </div>
+                    <div class="mode-btn advance" onclick="startQuiz(201)">
+                        <div class="mode-info">
+                            <h3>ADVANCE HEAVY PRECISION</h3>
+                            <p>8観点診断 / 200問 / ALL:25</p>
+                            <p class="time-est">目安時間: 30~60分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
+                    </div>
+                    <div class="mode-btn advance danger" onclick="showCourseWarning(400)">
+                        <div class="mode-info">
+                            <h3>ADVANCE MAX PRECISION</h3>
+                            <p>8観点診断 / 400問 / ALL:50</p>
+                            <p class="time-est">目安時間: 60~120分</p>
+                        </div>
+                        <span class="danger-mark" style="font-family: var(--font-mono);">!!</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-action-box">
+                <div class="menu-button-row">
+                    <button class="btn btn-database" onclick="showDatabase()">DATABASE</button>
+                    <div class="menu-sub-button-row">
+                        <button class="btn btn-notice" onclick="showMainNotice()">NOTICE</button>
+                        <button class="btn btn-credit" onclick="showCredit()">CREDIT</button>
+                        <button class="btn btn-history" onclick="showHistory()">HISTORY</button>
+                        <button class="btn btn-stats" onclick="showPublicStats()">PUBLIC STATS</button>
+                        <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()">LIGHT MODE</button>
+                    </div>
+                </div>
+                <div class="author-link-box">
+                    AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 1.2: Main Notice -->
+        <div id="notice-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-a); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);">WARNING</h1>
+            <div class="warning-box">
+                <h3>注意事項 / NOTICE</h3>
+                <ul>
+                    <li>正確な結果を得るために、直感に従って正直に回答してください。</li>
+                    <li>この診断結果は絶対的なものではありません。あくまでエンターテインメントとしてお楽しみいただき、結果を鵜呑みにしないでください。</li>
+                    <li>
+                        バグ報告・お問い合わせは下記までお願いします。<br>
+                        Email: unknownthedelta@gmail.com<br>
+                        X: <a href="https://twitter.com/Metalepsis_jp" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent); text-decoration:none;">@Metalepsis_jp</a>
+                    </li>
+                </ul>
+            </div>
+            <button class="btn" onclick="hideMainNotice()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+        </div>
+
+        <!-- Screen 1.3: Credit -->
+        <div id="credit-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-accent); text-shadow: 0 0 10px rgba(100, 255, 218, 0.3);">CREDIT</h1>
+            <div class="credit-box">
+                <h3>制作クレジット / CREDIT</h3>
+                <div class="credit-list">
+                    <div class="credit-row">
+                        <div class="credit-role">Author</div>
+                        <div class="credit-name"><a href="https://x.com/Metalepsis_" target="_blank" rel="noopener noreferrer">Metalepsis_</a></div>
+                    </div>
+                    <div class="credit-row">
+                        <div class="credit-role">Problem statement production</div>
+                        <div class="credit-name">Metalepsis_</div>
+                    </div>
+                    <div class="credit-row">
+                        <div class="credit-role">Production support</div>
+                        <div class="credit-name">Gemini、ChatGPT</div>
+                    </div>
+                </div>
+            </div>
+            <button class="btn" onclick="hideCredit()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+        </div>
+
+        <!-- Screen 1.4: History -->
+        <div id="history-screen" class="screen">
+            <div class="history-box">
+                <div class="history-header">
+                    <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">HISTORY</h1>
+                    <p style="color: #888; font-size: 0.9rem; line-height:1.7;">ローカルに保存された診断結果履歴</p>
+                </div>
+                <div class="history-actions">
+                    <button class="btn" onclick="hideHistory()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+                    <button class="btn" onclick="clearHistory()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-a); color: var(--color-a);">CLEAR HISTORY</button>
+                </div>
+                <div id="history-list" class="history-list"></div>
+            </div>
+        </div>
+
+
+
+        <!-- Screen 1.45: Public Stats -->
+        <div id="public-stats-screen" class="screen">
+            <div class="stats-box">
+                <div style="text-align: center; margin-bottom: 1rem;">
+                    <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">PUBLIC STATS</h1>
+                    <p style="color: #888; font-size: 0.9rem; line-height:1.7;">
+                        Firebase Firestoreに保存された公開集計です。個別回答・個人スコアは保存せず、コース別の結果数だけを表示します。
+                    </p>
+                </div>
+                <div class="stats-toolbar">
+                    <button class="btn" onclick="renderPublicStats()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem;">REFRESH</button>
+                    <button class="btn" onclick="hidePublicStats()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+                </div>
+                <div id="public-stats-list">
+                    <div class="stats-loading">読み込み待機中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 1.5: Database (Reference) -->
+        <div id="database-screen" class="screen">
+            <div class="db-container">
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">DATABASE</h1>
+                    <p style="color: #888; font-size: 0.9rem;">評価基準および診断結果一覧</p>
+                </div>
+
+                <!-- Section 1: The 4 Axes -->
+                <div class="db-section">
+                    <h2 class="db-h2">1. 評価の4つの基軸</h2>
+                    <div class="db-grid">
+                        <div class="db-card" style="border-left-color: var(--color-a);">
+                            <h3 style="color: var(--color-a);">【A】 回帰淘汰主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 秩序、純潔、選別、伝統<br>
+                                <strong>動機:</strong> 混沌を恐れ、世界を「本来あるべき美しい姿」に戻したい。<br>
+                                <strong>特徴:</strong> 規律を重んじ、異物を排除することで安定を図る。内側の結束は固い。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-b);">
+                            <h3 style="color: var(--color-b);">【B】 共命包摂主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 慈愛、多様性、生存、感情<br>
+                                <strong>動機:</strong> どのような命も否定せず、全てを抱きしめて共に生きたい。<br>
+                                <strong>特徴:</strong> 効率よりも情緒や生存権を優先する。優しさゆえに停滞を招くこともある。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-c);">
+                            <h3 style="color: var(--color-c);">【C】 適応進転主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 進化、技術、効率、未来<br>
+                                <strong>動機:</strong> 不完全さを嘆き、人間性を捨ててでも高次の存在へ変わりたい。<br>
+                                <strong>特徴:</strong> 合理性を最優先し、感情や伝統をバグとして処理する。冷徹だが解決力がある。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-d);">
+                            <h3 style="color: var(--color-d);">【D】 無差総質主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 平等、同質、共有、平穏<br>
+                                <strong>動機:</strong> 争いの原因となる「個体差」を憎み、境界線を溶かして一つになりたい。<br>
+                                <strong>特徴:</strong> 突出した才能や個性を否定し、完全な平等を求める。究極の平和だが個の死に近い。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Section 1.5: Advance Axes -->
+                <div class="db-section">
+                    <h2 class="db-h2">1.5. Advanceの補助4観点</h2>
+                    <p style="font-size:0.88rem; color:var(--color-dim); line-height:1.8; margin-bottom:1rem;">AdvanceではA〜DをMain Ideology、E〜HをAdvance Axisとして扱います。A〜Dは「何を理想とするか」、E〜Hは「その理想をどう運用するか」を見る補助軸です。</p>
+                    <div class="db-grid">
+                        <div class="db-card" style="border-left-color: var(--color-e);">
+                            <h3 style="color: var(--color-e);">【E】 境界固定主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 境界、所属、資格、責任<br>
+                                <strong>動機:</strong> 何を守るのか、誰が内側なのかを明確にしたい。<br>
+                                <strong>特徴:</strong> 共同体・権限・領域の線引きを重視する。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-f);">
+                            <h3 style="color: var(--color-f);">【F】 境界流動主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 越境、混合、接続、変化<br>
+                                <strong>動機:</strong> 固定された所属や役割から自由になりたい。<br>
+                                <strong>特徴:</strong> 異なるものが混ざることで生まれる可能性を重視する。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-g);">
+                            <h3 style="color: var(--color-g);">【G】 即応介入主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 介入、決断、速度、実行<br>
+                                <strong>動機:</strong> 問題が広がる前に、すぐ動いて被害を止めたい。<br>
+                                <strong>特徴:</strong> 長い議論よりも、実行と修正を優先する。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-h);">
+                            <h3 style="color: var(--color-h);">【H】 観測保留主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 観測、保留、非介入、熟成<br>
+                                <strong>動機:</strong> すぐ動かず、状況が自然に見えてくる時間を残したい。<br>
+                                <strong>特徴:</strong> 強い介入よりも、経過観察と当事者の選択を尊重する。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Logic -->
+                <div class="db-section">
+                    <h2 class="db-h2">2. 判定ロジック</h2>
+                    <div style="font-size: 0.9rem; line-height: 1.8;">
+                        <p><strong>採点方式:</strong> 全て加点方式です。「そう思わない」と回答した場合、対立する思想（A⇔B, C⇔D、AdvanceではE⇔F, G⇔H）に加点されます。</p>
+                        <p><strong>表示スコア:</strong> 結果画面のA/B/C/D%は、各思想の理論上満点に対する達成率です。問題数が違うコースでも比較しやすいよう、0〜100%で表示します。</p>
+                        <p><strong>STANDARD:</strong> 24問、A/B/C/Dを各6問ずつ出題します。固定バランス抽出で、直感的な傾向を出します。</p>
+                        <p><strong>LIGHT PRECISION:</strong> 48問、A/B/C/Dを各12問ずつ出題します。固定バランス抽出で、問題タイプの偏りを抑えて比較します。</p>
+                        <p><strong>MEDIUM PRECISION:</strong> 72問、A/B/C/Dを各18問ずつ出題します。Lightよりも安定した精密判定を行います。</p>
+                        <p><strong>HEAVY PRECISION:</strong> 100問、A/B/C/Dを各25問ずつ出題します。固定バランス抽出で、対立軸（A⇔B, C⇔D）の優勢度も評価します。</p>
+                        <p><strong>MAX PRECISION:</strong> 200問すべてを使用し、A/B/C/Dを各50問に揃えた全問バランス補正で判定します。最も時間がかかる代わりに、ブレを最小化した最精密モードです。</p>
+                        <p><strong>Heavy/Maxの内部評価:</strong> 表示スコアだけでなく、対立軸の優勢度も加味します。内部評価は「表示スコア×0.65 + 対立思想との差分×0.35」で計算します。例：A内部値 = A%×0.65 + max(0, A%−B%)×0.35。</p>
+                        <p><strong>精密限定判定:</strong> Light Precision以上では、中立連打の「∅」、高均衡の「N+」、低反応均衡の「N-」、極限単独の「++」、1思想だけ低い「!」、高密度複合の「#」を既存判定より先に評価します。</p>
+                        <div class="logic-detail-box">
+                            <h3>精密限定判定の数値条件 / Light Precision以上限定</h3>
+                            <ul>
+                                <li><strong>∅ 空白応答型:</strong> 中立回答率が72%以上。または、中立回答率62%以上かつ有効回答率38%以下。</li>
+                                <li><strong>N+ 完全均衡観測者:</strong> A/B/C/Dの標準偏差が4.2以下、平均スコア42%以上、中立回答率35%以下。</li>
+                                <li><strong>N- 低反応中立者:</strong> A/B/C/Dの標準偏差が5.0以下、かつ平均スコア28%以下。または中立回答率48%以上。</li>
+                                <li><strong>A++ / B++ / C++ / D++:</strong> トップ思想72%以上、対立思想12%以下、トップと2位の差18%以上。</li>
+                                <li><strong>!A / !B / !C / !D:</strong> 最下位思想15%以下、残り3思想の平均34%以上、3位と最下位の差12%以上。</li>
+                                <li><strong>AB# / AC# / AD# / BC# / BD# / CD#:</strong> 1位42%以上、2位42%以上、1位と2位の差6%以下、2位と3位の差7%以上。</li>
+                            </ul>
+                            <p class="logic-note">判定優先順位は「∅ → N+/N- → ++ → ! → # → 既存判定」です。先に条件を満たした結果が優先されます。</p>
+                        </div>
+                        <div class="logic-detail-box">
+                            <h3>Advance判定ロジック / A〜H 8観点診断</h3>
+                            <ul>
+                                <li><strong>Advanceの設問数:</strong> A〜Hの全観点を同じ設問数で出題します。40問は各5問、96問は各12問、144問は各18問、200問は各25問、400問は各50問です。</li>
+                                <li><strong>採点ペア:</strong> A⇔B、C⇔D、E⇔F、G⇔Hで対立します。賛成はその設問タイプへ加点、反対は対立タイプへ加点、中立は加点なしです。</li>
+                                <li><strong>Main Ideology:</strong> A/B/C/Dだけを使って主結果を判定します。通常診断と同じく、Light Precision以上では∅、N+/N-、++、!、#を優先し、その後に通常結果を判定します。</li>
+                                <li><strong>Advance Axis:</strong> E/F/G/Hだけを使って補助結果を判定します。Main Ideologyとは別枠で、結果は「Main / Adv」の形で表示します。</li>
+                                <li><strong>表示スコア:</strong> A〜Hの濃度は、各観点の理論上満点に対する達成率です。これは合計100%になる割合ではありません。</li>
+                                <li><strong>構成比グラフ:</strong> Graph 1はA/B/C/D内、Graph 2はE/F/G/H内で合計100%になるよう再計算した構成比を表示します。</li>
+                                <li><strong>レーダーチャート:</strong> A〜H全体のレーダーチャートは構成比ではなく、各観点の濃度を使います。各軸がどれだけ強いかを見るためのグラフです。</li>
+                            </ul>
+                            <p class="logic-note">Advanceでは、A〜Dを「何を理想とするか」、E〜Hを「その理想をどう運用するか」として分けて扱います。</p>
+                        </div>
+                        <div class="logic-detail-box">
+                            <h3>Advance Axisの数値条件 / E〜H補助結果</h3>
+                            <ul>
+                                <li><strong>N 補助軸中立:</strong> 中立回答率72%以上。または、E/F/G/Hの標準偏差が5.0未満かつ平均スコア28%未満。</li>
+                                <li><strong>E++ / F++ / G++ / H++:</strong> トップ補助軸72%以上、対立補助軸12%以下、トップと2位の差18%以上。</li>
+                                <li><strong>EG / EH / FG / FH:</strong> 1位42%以上、2位42%以上、1位と2位の差8%以下、2位と3位の差6%以上。境界軸と実行軸が組み合わさる通常の補助複合です。</li>
+                                <li><strong>EF / GH:</strong> 上と同じ複合条件を満たした場合に出る対立軸の矛盾型です。EFは境界固定と境界流動、GHは即応介入と観測保留が同時に高い状態です。</li>
+                                <li><strong>近接複合:</strong> 上位2軸がともに35%以上、かつ差が6%以下の場合、該当する補助複合が存在すれば複合型として扱います。</li>
+                                <li><strong>単独補助型:</strong> 上の条件に当てはまらない場合、最も高いE/F/G/Hを補助結果にします。ただしトップが58%以上の場合は、その軸の強い単独傾向として++表記を使います。</li>
+                            </ul>
+                            <p class="logic-note">Advance Axisの判定優先順位は「N → 厳密++ → 厳密複合/矛盾 → 近接複合 → 単独補助型」です。</p>
+                        </div>
+                        <p><strong>単独判定 (+/-):</strong> 1つの思想が突出している場合、コースごとの熱狂判定ラインを超えると「+」、未満なら「-」になります。</p>
+                    </div>
+                </div>
+
+                <!-- Section 3: List (Dynamic Content) -->
+                <div class="db-section" style="border-bottom: none;">
+                    <h2 class="db-h2">3. 診断結果一覧</h2>
+                    <p style="font-size: 0.8rem; color:#888; margin-bottom:1rem;">※カードをクリックすると詳細が表示されます</p>
+                    
+                    <div id="db-list-container">
+                        <!-- JS renders here -->
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 2rem;">
+                    <button class="btn" onclick="hideDatabase()">BACK TO MENU</button>
+                    <div class="author-link-box">
+                        AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 2: Quiz -->
+        <div id="quiz-screen" class="screen">
+            <div class="progress-container">
+                <div class="progress-bar-bg">
+                    <div id="progress-fill" class="progress-bar-fill"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.8rem; color:var(--color-dim);">
+                    <span id="section-title">SECTION 1</span>
+                    <span>Q.<span id="current-q">1</span>/<span id="total-q">25</span></span>
+                </div>
+            </div>
+
+            <div class="question-box">
+                <p id="question-text" class="question-text">読み込み中...</p>
+            </div>
+
+            <div class="options-grid">
+                <!-- 
+                    Updated Logic:
+                    Value 2: Agree Strong -> +2 to Type
+                    Value 1: Agree -> +1 to Type
+                    Value 0: Neutral -> +0
+                    Value -1: Disagree -> +1 to Counter Type
+                    Value -2: Disagree Strong -> +2 to Counter Type
+                -->
+                <button class="option-btn" onclick="handleAnswer(2)">
+                    <span style="font-size:1.2rem; color:var(--color-accent)">●</span> <span>非常にそう思う</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(1)">
+                    <span style="font-size:1rem;">○</span> <span>そう思う</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(0)">
+                    <span style="font-size:1rem; opacity:0.5">-</span> <span>どちらとも言えない</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(-1)">
+                    <span style="font-size:1rem;">×</span> <span>そう思わない</span>
+                </button>
+                <button class="option-btn" onclick="handleAnswer(-2)">
+                    <span style="font-size:1.2rem; color:var(--color-a)">✕</span> <span>非常にそう思わない</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 3: Result -->
+        <div id="result-screen" class="screen">
+            <div class="result-content">
+                <!-- Chart Area -->
+                <div class="chart-wrapper">
+                    <div id="pie-chart" class="chart-container">
+                        <div class="chart-overlay">
+                            <span style="font-size: 0.8rem; color: #888; font-family:var(--font-mono);">CLASS</span>
+                            <span id="result-code" style="font-size: 2.5rem; font-weight:bold; font-family:var(--font-mono);">--</span>
+                        </div>
+                    </div>
+                    <div class="legend" id="result-legend">
+                        <!-- JS renders here -->
+                    </div>
+                    <div id="advance-visuals" class="advance-visuals">
+                        <div class="mini-chart-grid">
+                            <div class="mini-chart-card">
+                                <div class="mini-chart-title">GRAPH 1 / MAIN IDEOLOGY</div>
+                                <div id="main-mini-pie" class="mini-pie" data-code="A-D"></div>
+                                <div id="main-mini-legend" class="advance-legend"></div>
+                            </div>
+                            <div class="mini-chart-card">
+                                <div class="mini-chart-title">GRAPH 2 / ADVANCE AXIS</div>
+                                <div id="advance-mini-pie" class="mini-pie" data-code="E-H"></div>
+                                <div id="advance-mini-legend" class="advance-legend"></div>
+                            </div>
+                            <div class="mini-chart-card">
+                                <div class="mini-chart-title">GRAPH 3 / A〜H RADAR</div>
+                                <div class="radar-wrap"><svg id="radar-chart" width="260" height="260" viewBox="0 0 260 260" role="img" aria-label="A〜H 全体レーダーチャート"></svg></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Area -->
+                <div class="result-text-area" id="result-card">
+                    <div id="result-course" style="font-family:var(--font-mono); font-size:0.85rem; color:var(--color-accent); margin-bottom:0.6rem; letter-spacing:0.08em;">COURSE: --</div>
+                    <div id="result-title" style="font-size: 1.4rem; font-weight: bold; margin-bottom: 0.5rem;">分析中...</div>
+                    <div id="result-quote" style="font-style: italic; color: #888; margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">...</div>
+                    <div id="result-desc" style="font-size: 0.95rem; line-height: 1.8;">...</div>
+                    <div id="advance-result-box" class="advance-result-box" style="display:none;"></div>
+                    
+                    <div style="margin-top: 2rem; text-align: center; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn" onclick="restartQuiz()" style="padding: 0.5rem 2rem; font-size: 1rem;">RESET</button>
+                        <button class="btn btn-share" onclick="shareOnTwitter()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE (X)</button>
+                        <button class="btn btn-hashtag" onclick="openHashtagResults()" style="padding: 0.5rem 2rem; font-size: 1rem;">他の人の結果を見る</button>
+                        <button class="btn btn-history" onclick="renderHistory(); switchScreen(resultScreen, historyScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">HISTORY</button>
+                        <button class="btn btn-stats" onclick="renderPublicStats(); switchScreen(resultScreen, publicStatsScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">PUBLIC STATS</button>
+                    </div>
+                    <div class="author-link-box">
+                        AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- Question Pool (200 Questions) ---
+    const questionPool = [
+        // Original 25
+        { t: "生まれ持った資質や才能の差は、その人の運命や役割を決定づける重要な要素である。", type: "A", s: "価値" },
+        { t: "弱き者がそのまま生きられる社会よりも、弱き者が強き者へと変われる手助けをする社会こそが健全だ。", type: "C", s: "価値" },
+        { t: "どのような凶悪な犯罪者であっても、その存在の根源的な価値は聖人と同じである。", type: "B", s: "価値" },
+        { t: "個人の『個性』や『自分らしさ』への固執こそが、人間社会に不幸をもたらす元凶だ。", type: "D", s: "価値" },
+        { t: "美しい庭を保つためには、時として雑草を抜くように、社会全体のために一部を間引く決断もやむを得ない。", type: "A", s: "価値" },
+        { t: "多様な意見を認め合うことは大切だが、それが結論の先送りや停滞を招くなら、強力なリーダーシップで統一すべきだ。", type: "A", s: "倫理" },
+        { t: "過去の過ちや欠陥を許容する優しさよりも、それを技術やシステムで『二度と起きないように修正する』ことこそが本当の愛だ。", type: "C", s: "倫理" },
+        { t: "誰かが悲しむくらいなら、全員が同じ感情、同じ幸福度で生きられるように調整された世界の方が良い。", type: "D", s: "倫理" },
+        { t: "効率や進化のために誰かが犠牲になることは、倫理的に決して許されない。", type: "B", s: "倫理" },
+        { t: "世界がカオス（混沌）に陥るくらいなら、厳しい規律によって管理された静寂の方が好ましい。", type: "A", s: "倫理" },
+        { t: "社会の構成員は、それぞれの能力に応じて明確に区別・管理されるべきだ。", type: "A", s: "統治" },
+        { t: "理想的な社会とは、全ての人間が『同じ顔、同じ思考』を持ち、対立の概念すら消滅した状態である。", type: "D", s: "統治" },
+        { t: "現状の肉体や精神に限界を感じるならば、機械化や遺伝子操作を行ってでも『より高次な存在』を目指すべきだ。", type: "C", s: "統治" },
+        { t: "役に立たないと思われる存在であっても、それが社会という生態系の一部として機能していることを忘れてはならない。", type: "B", s: "統治" },
+        { t: "不平等を是正するために富を分配するより、不平等そのものが無意味になるよう、全員の精神構造を統一する方が根本解決になる。", type: "D", s: "統治" },
+        { t: "対立する相手を説得する時間があるなら、相手を『自分と同じ考え』になるようアップデート（改造）してあげた方が互いのためだ。", type: "C", s: "対立" },
+        { t: "純粋な水を濁らせないためには、最初から不純物を入れない、あるいは見つけ次第取り除く厳格さが必要だ。", type: "A", s: "対立" },
+        { t: "争いは『私』と『あなた』という境界線があるから生まれる。その境界線を溶かしてしまえば平和が訪れる。", type: "D", s: "対立" },
+        { t: "理解し合えない他者がいたとしても、その不快感と共に生きることこそが成熟した社会の姿だ。", type: "B", s: "対立" },
+        { t: "『欠落』や『病』は、治療し克服すべきエラーであり、それを受け入れて共存するのは敗北に等しい。", type: "C", s: "対立" },
+        { t: "世界を救うために『選ばれた1000人』だけを残し、残りを切り捨てる箱舟の扉を、あなたは閉めることができる。", type: "A", s: "選択" },
+        { t: "全人類の意識を統合し、個を消滅させることで永遠の平穏が得られるスイッチがあるなら、迷わず押すべきだ。", type: "D", s: "選択" },
+        { t: "致死率の高いウイルスが蔓延した際、人権を無視してでも全市民に強制的に人体改造（ワクチン以上の身体強化）を施すべきだ。", type: "C", s: "選択" },
+        { t: "たとえ人類が滅亡するとしても、誰かの命を意図的に選別したり、強制的に変質させたりする権利は誰にもない。", type: "B", s: "選択" },
+        { t: "『不完全なまま愛し合う世界』と『完全無欠で孤独な世界』。選ぶなら前者だ。", type: "B", s: "選択" },
+        // Previous 25 Questions for Precision
+        { t: "伝統や歴史的背景を持たない『新しいもの』は、既存の秩序を乱すノイズになりやすい。", type: "A", s: "伝統" },
+        { t: "苦しみを取り除くためなら、人類が人間という生物種でなくなっても構わない。", type: "C", s: "進化" },
+        { t: "『優秀な遺伝子』を残すことよりも、『全ての遺伝子』が残る可能性を模索するべきだ。", type: "B", s: "生存" },
+        { t: "名前も顔も履歴も全て捨て去り、ただの『番号』として管理される社会に安らぎを感じる。", type: "D", s: "匿名" },
+        { t: "汚れた部屋を掃除する時、使えるものまで捨ててしまうリスクを恐れては、真の清潔さは手に入らない。", type: "A", s: "浄化" },
+        { t: "自然な老化や死を受け入れることは美徳ではなく、技術的な敗北である。", type: "C", s: "技術" },
+        { t: "たとえ非効率で愚かな選択であっても、他者が『間違える権利』を尊重すべきだ。", type: "B", s: "自由" },
+        { t: "他人との比較で生まれる劣等感を消す最良の方法は、全員の能力を均一化することだ。", type: "D", s: "平等" },
+        { t: "血統や純潔を守ることは、差別ではなく種としての誇りである。", type: "A", s: "血統" },
+        { t: "感情は判断を鈍らせるバグであり、論理的最適解を導くためには抑制・削除すべきだ。", type: "C", s: "理性" },
+        { t: "弱肉強食は自然の摂理かもしれないが、文明とはそれに抗うためにある。", type: "B", s: "文明" },
+        { t: "私有財産だけでなく、私有的な『感情』や『記憶』も共有財産とすべきだ。", type: "D", s: "共有" },
+        { t: "一度汚染された大地は、再生させるよりも封鎖して見捨てる方が合理的だ。", type: "A", s: "放棄" },
+        { t: "人間は環境に適応するのではなく、環境を人間に合わせて作り変えるべきだ。", type: "C", s: "支配" },
+        { t: "どのような異端な思想であっても、社会の片隅に居場所を用意する度量が世界には必要だ。", type: "B", s: "寛容" },
+        { t: "『特別な誰か』になろうとする野心こそが、平穏な日常を破壊する。", type: "D", s: "野心" },
+        { t: "美しさとは『混ざりけのないこと』であり、複雑さは醜さの一形態に過ぎない。", type: "A", s: "美学" },
+        { t: "記憶をデータ化し、永遠に生きられるサーバーがあるなら、肉体を捨ててアップロードする。", type: "C", s: "永遠" },
+        { t: "傷つけ合うことなしに、深い理解や愛は生まれない。", type: "B", s: "関係" },
+        { t: "壁のない家に住み、隠し事のない生活を送ることは、監視ではなく信頼の極致だ。", type: "D", s: "開放" },
+        { t: "救命ボートが定員オーバーの時、未来ある若者を優先し、老人は海に落とすべきだ。", type: "C", s: "功利" },
+        { t: "『敵』の子供であっても、助けを求められれば手を差し伸べるのが人の道だ。", type: "B", s: "人道" },
+        { t: "正義の反対は悪ではなく、『別の正義』である。ゆえに、どちらか一つが消えるまで戦うしかない。", type: "A", s: "決着" },
+        { t: "言葉による誤解をなくすためなら、全人類の言語を統一し、思考のニュアンスまで規格化すべきだ。", type: "D", s: "統一" },
+        { t: "何も生み出さず、何も消費しない植物のような状態で、ただ『存在する』だけの幸福も認められるべきだ。", type: "B", s: "存在" },
+        // Newly Added 50 Questions (Total 100)
+        // A
+        { t: "汚れた血筋は、何代かけても浄化されることはない。", type: "A", s: "血統" },
+        { t: "規律を乱す芸術は、退廃的であり禁止されるべきだ。", type: "A", s: "芸術" },
+        { t: "完璧な辞書を作るためには、曖昧な言葉を削除し続ける必要がある。", type: "A", s: "定義" },
+        { t: "「例外」を認めることが、すべての崩壊の始まりだ。", type: "A", s: "原則" },
+        { t: "美しい街並みとは、ゴミ一つなく、住民の服装すら統一された状態のことだ。", type: "A", s: "美観" },
+        { t: "過去の偉人たちが築いた伝統こそが、未来永劫守るべき唯一の正解だ。", type: "A", s: "正統" },
+        { t: "異物は、排除されるか、同化されるかの二択しかない。", type: "A", s: "異物" },
+        { t: "清掃とは、単に汚れを取ることではなく、精神を磨く儀式である。", type: "A", s: "精神" },
+        { t: "ノイズの多い議論よりも、沈黙による服従の方が美しい。", type: "A", s: "静寂" },
+        { t: "壁は、外敵を防ぐためではなく、内側の純度を保つためにある。", type: "A", s: "境界" },
+        { t: "指導者の言葉は法であり、解釈の余地を与えてはならない。", type: "A", s: "権威" },
+        { t: "混血や融合は多様性ではなく、ただの劣化である。", type: "A", s: "純度" },
+        { t: "秩序のための暴力は、暴力ではなく「外科手術」である。", type: "A", s: "断行" },
+        // B
+        { t: "どんなに非効率でも、全員の合意が取れるまで話し合うべきだ。", type: "B", s: "対話" },
+        { t: "痛みを感じるすべての存在には、生きる権利がある。", type: "B", s: "権利" },
+        { t: "枯れた花にも美しさがあり、それを捨てずに愛でる心が必要だ。", type: "B", s: "慈愛" },
+        { t: "科学の進歩が誰かを傷つけるなら、その進歩は止めるべきだ。", type: "B", s: "停滞" },
+        { t: "「役に立つか」で人を判断するのは、最も野蛮な行為だ。", type: "B", s: "尊厳" },
+        { t: "故郷や思い出の場所は、どんな開発計画よりも優先して守られるべきだ。", type: "B", s: "記憶" },
+        { t: "強さとは敵を倒す力ではなく、敵を作らない優しさのことだ。", type: "B", s: "強さ" },
+        { t: "たとえ世界が滅びるとしても、最後の瞬間まで手を取り合っていたい。", type: "B", s: "絆" },
+        { t: "不便さや苦労の中にこそ、人間らしい温かみがある。", type: "B", s: "人間味" },
+        { t: "機械には決して理解できない「魂」の領域がある。", type: "B", s: "霊性" },
+        { t: "弱者を切り捨てて得た繁栄に、何の価値もない。", type: "B", s: "正義" },
+        { t: "許すことこそが、復讐の連鎖を断ち切る唯一の方法だ。", type: "B", s: "赦し" },
+        // C
+        { t: "肉体は単なる乗り物であり、交換可能であるべきだ。", type: "C", s: "肉体" },
+        { t: "死は克服可能な技術的課題に過ぎない。", type: "C", s: "超越" },
+        { t: "感情は電気信号であり、調整可能である。", type: "C", s: "制御" },
+        { t: "自然のままの食品よりも、栄養素を完全に管理された合成食の方が優れている。", type: "C", s: "効率" },
+        { t: "才能という不確定要素に頼るより、遺伝子編集で確実な能力を与えるべきだ。", type: "C", s: "確実性" },
+        { t: "非効率な言語を捨て、脳同士を直結して通信すべきだ。", type: "C", s: "通信" },
+        { t: "過去を振り返る時間は無駄であり、常に未来のシミュレーションを行うべきだ。", type: "C", s: "未来" },
+        { t: "愛も友情も、ホルモンバランスの最適化で再現できる。", type: "C", s: "解析" },
+        { t: "宇宙に進出するためなら、地球を使い潰しても構わない。", type: "C", s: "進出" },
+        { t: "睡眠時間は人生の浪費であり、薬物や改造で短縮すべきだ。", type: "C", s: "時間" },
+        { t: "失敗作は即座に廃棄し、バージョンアップ版を作るのが慈悲だ。", type: "C", s: "更新" },
+        { t: "人間は「神」によって作られたのではなく、自らの手で「神」になる存在だ。", type: "C", s: "神格" },
+        { t: "痛みは危険信号に過ぎず、スイッチ一つでオフにできる機能であるべきだ。", type: "C", s: "機能" },
+        // D
+        { t: "名前ではなく、共通のIDで呼び合う方が差別が生まれない。", type: "D", s: "記号" },
+        { t: "私服は貧富の差を可視化するため、全員が制服を着るべきだ。", type: "D", s: "均一" },
+        { t: "「勝者」がいるということは、必ず「敗者」が生まれるということだ。だから勝負などしない。", type: "D", s: "競争" },
+        { t: "天才の存在は、凡人を不幸にするだけだ。", type: "D", s: "突出" },
+        { t: "すべての家の間取り、家具、食事を同じにすれば、妬みは消える。", type: "D", s: "同質" },
+        { t: "親が子供を育てる制度は格差の温床であり、社会全体で集団養育すべきだ。", type: "D", s: "養育" },
+        { t: "所有欲こそが悪の根源であり、すべてをシェアすれば平和になる。", type: "D", s: "共有" },
+        { t: "顔の造形による美醜の差をなくすため、全員整形するか仮面をつけるべきだ。", type: "D", s: "外見" },
+        { t: "突出した杭は打たれるべきであり、平らな地平線こそが理想だ。", type: "D", s: "平準" },
+        { t: "「私」という主語をなくし、「我々」とだけ言えばいい。", type: "D", s: "主語" },
+        { t: "芸術は個人の表現ではなく、社会全体のプロパガンダであるべきだ。", type: "D", s: "公共" },
+        { t: "違いを認めるのではなく、違いそのものを消滅させるのが究極の解決だ。", type: "D", s: "解決" },
+        // Added 100 Questions for MAX PRECISION (Total 200 / A:50 B:50 C:50 D:50)
+        // A +24
+        { t: "社会には、時代が変わっても変えてはいけない中心規範が必要だ。", type: "A", s: "規範" },
+        { t: "自由な混合よりも、守られた系譜や型の方が文化を強く保つ。", type: "A", s: "継承" },
+        { t: "ルール違反者への過度な温情は、秩序全体を弱体化させる。", type: "A", s: "規律" },
+        { t: "共同体の品位を保つためには、参加資格や作法を明確にするべきだ。", type: "A", s: "格式" },
+        { t: "伝統的な作法から外れた表現は、まず正しい型へ戻すべきだ。", type: "A", s: "作法" },
+        { t: "外から入る価値観は、すぐ受け入れず、影響を慎重に見極めるべきだ。", type: "A", s: "境界" },
+        { t: "大多数の安全を守るためなら、少数の例外的行動を制限するのは当然だ。", type: "A", s: "安全" },
+        { t: "美しい制度は、全員が同じ手順を守ることで初めて成立する。", type: "A", s: "制度" },
+        { t: "古い慣習には、現代の理屈だけでは測れない価値が宿っている。", type: "A", s: "慣習" },
+        { t: "秩序を壊す自由は、もはや自由ではなくただの無秩序だ。", type: "A", s: "自由" },
+        { t: "正しい文化を守るには、曖昧な寛容より明確な線引きが必要だ。", type: "A", s: "線引き" },
+        { t: "能力や貢献に応じて階層が生まれることは、社会の自然な姿だ。", type: "A", s: "階層" },
+        { t: "公共空間では、個人の好みよりも全体の統一感を優先すべきだ。", type: "A", s: "公共" },
+        { t: "社会の中枢に近づくほど、身元や背景は厳密に確認されるべきだ。", type: "A", s: "審査" },
+        { t: "危険な思想は、広まってから議論するより、早い段階で封じ込める方が健全だ。", type: "A", s: "防疫" },
+        { t: "正統な教育は、全員が同じ古典や基礎から学ぶことで成り立つ。", type: "A", s: "教育" },
+        { t: "多様性の名のもとに伝統の輪郭が薄まることは、社会的な損失だ。", type: "A", s: "伝統" },
+        { t: "混乱期には、長い議論よりも明確な命令系統を優先すべきだ。", type: "A", s: "指揮" },
+        { t: "清潔さや礼節は、単なる外見ではなく内面の質を示す。", type: "A", s: "礼節" },
+        { t: "守るべき中心がない社会は、その時々の流行に簡単に流される。", type: "A", s: "中心" },
+        { t: "不安定な改革より、長く検証されてきた制度の方を信頼したい。", type: "A", s: "検証" },
+        { t: "表現の自由にも、共同体の品位による上限があるべきだ。", type: "A", s: "品位" },
+        { t: "共同体に溶け込めない価値観を、中枢に入れるべきではない。", type: "A", s: "中枢" },
+        { t: "役割が明確な社会は、個人を迷わせず安定させる。", type: "A", s: "役割" },
+        // B +25
+        { t: "制度の完成度より、目の前で困っている人を置き去りにしないことが大切だ。", type: "B", s: "救済" },
+        { t: "間違いを犯した人にも、もう一度戻ってこられる場所が必要だ。", type: "B", s: "再起" },
+        { t: "社会は最も速い人ではなく、最も遅い人に合わせる余裕を持つべきだ。", type: "B", s: "余裕" },
+        { t: "完全な合理性よりも、人が安心できる温かい余白を残したい。", type: "B", s: "温度" },
+        { t: "誰かの弱さは、責める対象ではなく、支えるための合図である。", type: "B", s: "弱さ" },
+        { t: "効率だけで選ばれなかったものにも、残すべき意味がある。", type: "B", s: "意味" },
+        { t: "違いをなくすより、違いを抱えたまま隣にいられる社会が良い。", type: "B", s: "共存" },
+        { t: "古く非効率な習慣でも、人の思い出を支えているなら簡単に捨てるべきではない。", type: "B", s: "思い出" },
+        { t: "正しさで相手を追い詰めるより、相手が話せる空気を守りたい。", type: "B", s: "対話" },
+        { t: "競争に勝てない人にも、尊厳ある居場所が必要だ。", type: "B", s: "尊厳" },
+        { t: "社会の価値は、強い人をどれだけ伸ばすかより、弱い人をどう支えるかに表れる。", type: "B", s: "支援" },
+        { t: "すぐに役立たない人や物事にも、未来の可能性がある。", type: "B", s: "可能性" },
+        { t: "不完全な関係でも、切り捨てずに続けることでしか生まれない信頼がある。", type: "B", s: "信頼" },
+        { t: "人間らしさとは、計算では割り切れない迷いやためらいの中にもある。", type: "B", s: "人間性" },
+        { t: "傷ついた人に必要なのは、正論より先に安心できる場所だ。", type: "B", s: "安心" },
+        { t: "誰かの失敗を記録して管理するより、忘れてやり直せる余地を残したい。", type: "B", s: "赦し" },
+        { t: "他者の価値は、社会にどれだけ貢献したかだけでは測れない。", type: "B", s: "価値" },
+        { t: "異質なものを排除する前に、その背景を知ろうとする姿勢が必要だ。", type: "B", s: "理解" },
+        { t: "みんなが少しずつ損をしても、誰か一人を孤立させない方が良い。", type: "B", s: "連帯" },
+        { t: "便利さのために、人の手触りや偶然の出会いを失いたくない。", type: "B", s: "偶然" },
+        { t: "正しい未来よりも、誰も置いていかない未来を選びたい。", type: "B", s: "未来" },
+        { t: "怒りや悲しみのような感情も、人が人であるために必要なものだ。", type: "B", s: "感情" },
+        { t: "小さな声を聞くためなら、決定が遅くなっても構わない。", type: "B", s: "傾聴" },
+        { t: "完璧な世界より、互いに世話を焼き合う不完全な世界の方が良い。", type: "B", s: "世話" },
+        { t: "たとえ考え方が合わなくても、同じ場所で生きる方法を探すべきだ。", type: "B", s: "共生" },
+        // C +25
+        { t: "人間の限界は、受け入れるものではなく更新するものだ。", type: "C", s: "更新" },
+        { t: "感情的な判断を減らすため、重要な意思決定にはAIの補助を入れるべきだ。", type: "C", s: "AI" },
+        { t: "伝統よりも、検証可能なデータによって社会を設計したい。", type: "C", s: "データ" },
+        { t: "不便を美徳と呼ぶより、仕組みを改善して負担を消す方が誠実だ。", type: "C", s: "改善" },
+        { t: "教育は個性に任せるより、最適化されたカリキュラムで能力を伸ばすべきだ。", type: "C", s: "教育" },
+        { t: "曖昧な経験則より、測定された結果を信じたい。", type: "C", s: "測定" },
+        { t: "人の能力差は、技術によって縮めたり拡張したりできる課題だ。", type: "C", s: "能力" },
+        { t: "社会問題は、道徳論よりもシステム設計で解決するべきだ。", type: "C", s: "設計" },
+        { t: "記憶や学習を外部装置で補えるなら、積極的に使うべきだ。", type: "C", s: "拡張" },
+        { t: "人間らしさを守るためでも、改善できる欠陥を放置するべきではない。", type: "C", s: "欠陥" },
+        { t: "社会の遅さは、多くの場合、技術不足ではなく導入の遅れから生まれる。", type: "C", s: "導入" },
+        { t: "感覚や印象に頼る議論は、数値化して比較できる形にするべきだ。", type: "C", s: "数値化" },
+        { t: "肉体的な制約に縛られず、より自由な存在形式を選べる社会が良い。", type: "C", s: "身体" },
+        { t: "未来のためなら、今の生活様式を大きく作り替える覚悟が必要だ。", type: "C", s: "未来" },
+        { t: "偶然に任せるより、予測モデルで失敗を減らす方が優しい。", type: "C", s: "予測" },
+        { t: "言葉で誤解するくらいなら、思考や情報を直接共有できる技術がほしい。", type: "C", s: "通信" },
+        { t: "人類は自然に合わせるだけでなく、自然条件そのものを調整する段階に来ている。", type: "C", s: "環境" },
+        { t: "長く続いている制度でも、性能が低いなら新しいものに置き換えるべきだ。", type: "C", s: "置換" },
+        { t: "努力に頼るより、努力しなくても成果が出る仕組みを作る方が合理的だ。", type: "C", s: "自動化" },
+        { t: "人格や性格も、本人が望むなら調整できる選択肢があってよい。", type: "C", s: "調整" },
+        { t: "社会の改善には、感動的な物語より再現性のある手順が必要だ。", type: "C", s: "再現性" },
+        { t: "個人の経験談より、大量のデータから見える傾向を重視したい。", type: "C", s: "統計" },
+        { t: "人間が不得意なことは、無理に鍛えるより機械に任せればよい。", type: "C", s: "委任" },
+        { t: "新しい技術が不自然に見えても、幸福を増やすなら採用すべきだ。", type: "C", s: "採用" },
+        { t: "未来の標準から見れば、現在の人間のまま留まること自体が非効率かもしれない。", type: "C", s: "標準" },
+        // D +26
+        { t: "才能の差が大きすぎる社会では、平穏な共同生活は成り立ちにくい。", type: "D", s: "才能" },
+        { t: "個人の成功を称えるより、全員が同じ安心を得られる仕組みを重視したい。", type: "D", s: "安心" },
+        { t: "目立つ個性は、周囲に比較や劣等感を生むことがある。", type: "D", s: "個性" },
+        { t: "できるだけ全員が同じ条件から始められるよう、家庭差や環境差を小さくすべきだ。", type: "D", s: "条件" },
+        { t: "特別扱いされる人がいる限り、誰かの不満は消えない。", type: "D", s: "特別" },
+        { t: "所有する量の差が、心の距離や上下関係を生み出す。", type: "D", s: "所有" },
+        { t: "競争に勝つ喜びより、競争しなくていい安心の方を広げたい。", type: "D", s: "競争" },
+        { t: "名前や肩書きによる印象差を減らすため、もっと匿名的な関係でもよい。", type: "D", s: "匿名" },
+        { t: "突出した英雄を待つより、全員が同じだけ支え合う社会が安定する。", type: "D", s: "安定" },
+        { t: "多様な意見を調整し続けるより、最初から共通の基準に揃えた方が対立は少ない。", type: "D", s: "基準" },
+        { t: "人より優れていることを示す記号は、できるだけ社会から減らすべきだ。", type: "D", s: "記号" },
+        { t: "誰かだけが豊かになるより、全員がほどほどに同じである方が健全だ。", type: "D", s: "均等" },
+        { t: "個人の夢より、集団全体の平穏を乱さないことを優先すべき場面が多い。", type: "D", s: "平穏" },
+        { t: "評価制度は、人を伸ばすよりも人を比べる装置になりやすい。", type: "D", s: "評価" },
+        { t: "能力の高い人に多く任せるほど、社会はその人に依存してしまう。", type: "D", s: "依存" },
+        { t: "個人の自由が強すぎると、共同体の一体感は失われる。", type: "D", s: "一体感" },
+        { t: "全員が似た生活リズムを持てば、孤独や疎外感は減る。", type: "D", s: "生活" },
+        { t: "外見や服装の差は、思っている以上に人間関係の壁を作る。", type: "D", s: "外見" },
+        { t: "個人の成果物であっても、社会の中で生まれた以上、共有されるべき面がある。", type: "D", s: "共有" },
+        { t: "誰かが上に立つ構造そのものを減らせば、争いも減っていく。", type: "D", s: "上下" },
+        { t: "違いを尊重するだけでは、違いから生まれる苦しみは消えない。", type: "D", s: "差異" },
+        { t: "人は個人としてより、集団の一部として生きる方が安心できる。", type: "D", s: "集団" },
+        { t: "目標や夢を個人ごとに分けるより、社会全体で共有した方がまとまりが出る。", type: "D", s: "目標" },
+        { t: "勝ち負けの物語より、誰も抜け出さない円環のような日常に惹かれる。", type: "D", s: "日常" },
+        { t: "個人の秘密が少ない社会の方が、疑いや不信は減る。", type: "D", s: "透明性" },
+        { t: "全員の差が小さいほど、嫉妬や優越感に振り回されずに済む。", type: "D", s: "平準" }
+
+    ];
+
+
+
+    // --- Advance Question Pool (E/F/G/H, 50 each) ---
+    const advanceQuestionPool = [
+        { t: "共同体を守るには、内側と外側の境界を明確にする必要がある。", type: "E", s: "境界" },
+        { t: "誰が責任を持つ範囲なのかを曖昧にすると、組織は混乱する。", type: "E", s: "所属" },
+        { t: "所属や資格を確認する仕組みは、排除ではなく安全のために必要だ。", type: "E", s: "資格" },
+        { t: "開かれた場であっても、中心に近づく人には厳しい条件が必要だ。", type: "E", s: "領域" },
+        { t: "境界線のない優しさは、守るべき人まで危険にさらすことがある。", type: "E", s: "責任" },
+        { t: "文化や制度には、外から触れてよい部分と触れてはいけない部分がある。", type: "E", s: "中枢" },
+        { t: "誰でも同じ権限を持てる仕組みは、責任の所在を薄めてしまう。", type: "E", s: "保護" },
+        { t: "場の秩序を保つには、参加者に共通の作法を求めるべきだ。", type: "E", s: "作法" },
+        { t: "自由な出入りよりも、信頼できる範囲を守る方が安心できる。", type: "E", s: "内外" },
+        { t: "境界を壊す前に、その境界が何を守っていたのか考えるべきだ。", type: "E", s: "権限" },
+        { t: "境界を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "境界" },
+        { t: "境界を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "所属" },
+        { t: "大切な場ほど、境界に関する基準を明文化すべきだ。", type: "E", s: "資格" },
+        { t: "信頼できる関係には、まず境界の確認が必要だ。", type: "E", s: "領域" },
+        { t: "所属を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "責任" },
+        { t: "所属を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "中枢" },
+        { t: "大切な場ほど、所属に関する基準を明文化すべきだ。", type: "E", s: "保護" },
+        { t: "信頼できる関係には、まず所属の確認が必要だ。", type: "E", s: "作法" },
+        { t: "資格を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "内外" },
+        { t: "資格を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "権限" },
+        { t: "大切な場ほど、資格に関する基準を明文化すべきだ。", type: "E", s: "境界" },
+        { t: "信頼できる関係には、まず資格の確認が必要だ。", type: "E", s: "所属" },
+        { t: "領域を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "資格" },
+        { t: "領域を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "領域" },
+        { t: "大切な場ほど、領域に関する基準を明文化すべきだ。", type: "E", s: "責任" },
+        { t: "信頼できる関係には、まず領域の確認が必要だ。", type: "E", s: "中枢" },
+        { t: "責任を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "保護" },
+        { t: "責任を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "作法" },
+        { t: "大切な場ほど、責任に関する基準を明文化すべきだ。", type: "E", s: "内外" },
+        { t: "信頼できる関係には、まず責任の確認が必要だ。", type: "E", s: "権限" },
+        { t: "中枢を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "境界" },
+        { t: "中枢を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "所属" },
+        { t: "大切な場ほど、中枢に関する基準を明文化すべきだ。", type: "E", s: "資格" },
+        { t: "信頼できる関係には、まず中枢の確認が必要だ。", type: "E", s: "領域" },
+        { t: "保護を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "責任" },
+        { t: "保護を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "中枢" },
+        { t: "大切な場ほど、保護に関する基準を明文化すべきだ。", type: "E", s: "保護" },
+        { t: "信頼できる関係には、まず保護の確認が必要だ。", type: "E", s: "作法" },
+        { t: "作法を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "内外" },
+        { t: "作法を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "権限" },
+        { t: "大切な場ほど、作法に関する基準を明文化すべきだ。", type: "E", s: "境界" },
+        { t: "信頼できる関係には、まず作法の確認が必要だ。", type: "E", s: "所属" },
+        { t: "内外を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "資格" },
+        { t: "内外を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "領域" },
+        { t: "大切な場ほど、内外に関する基準を明文化すべきだ。", type: "E", s: "責任" },
+        { t: "信頼できる関係には、まず内外の確認が必要だ。", type: "E", s: "中枢" },
+        { t: "権限を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "保護" },
+        { t: "権限を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "作法" },
+        { t: "大切な場ほど、権限に関する基準を明文化すべきだ。", type: "E", s: "内外" },
+        { t: "信頼できる関係には、まず権限の確認が必要だ。", type: "E", s: "権限" },
+        { t: "人は一つの所属や役割に縛られず、状況に応じて変わってよい。", type: "F", s: "越境" },
+        { t: "異なる文化や思想が混ざることで、新しい可能性が生まれる。", type: "F", s: "混合" },
+        { t: "境界線は守るものではなく、必要に応じて引き直すものだ。", type: "F", s: "移動" },
+        { t: "外部から来た価値観こそ、停滞した場を動かす力になる。", type: "F", s: "接続" },
+        { t: "固定された身分や肩書きより、移動し続ける関係の方が自然だ。", type: "F", s: "開放" },
+        { t: "どこまでが内側でどこからが外側かは、時代によって変わってよい。", type: "F", s: "交差" },
+        { t: "純粋さを守るより、混ざり合うことで生まれる変化を重視したい。", type: "F", s: "流動" },
+        { t: "ルールに合わない存在でも、場そのものを変えるきっかけになり得る。", type: "F", s: "変化" },
+        { t: "境界を越える経験が、人や社会の視野を広げる。", type: "F", s: "外部" },
+        { t: "閉じた共同体より、出入りの多い流動的な場に魅力を感じる。", type: "F", s: "融合" },
+        { t: "越境を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "越境" },
+        { t: "固定された分類より、越境によって生まれる関係を重視したい。", type: "F", s: "混合" },
+        { t: "閉じた仕組みは、越境によって更新されるべきだ。", type: "F", s: "移動" },
+        { t: "人の可能性は、越境を許すほど広がっていく。", type: "F", s: "接続" },
+        { t: "混合を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "開放" },
+        { t: "固定された分類より、混合によって生まれる関係を重視したい。", type: "F", s: "交差" },
+        { t: "閉じた仕組みは、混合によって更新されるべきだ。", type: "F", s: "流動" },
+        { t: "人の可能性は、混合を許すほど広がっていく。", type: "F", s: "変化" },
+        { t: "移動を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "外部" },
+        { t: "固定された分類より、移動によって生まれる関係を重視したい。", type: "F", s: "融合" },
+        { t: "閉じた仕組みは、移動によって更新されるべきだ。", type: "F", s: "越境" },
+        { t: "人の可能性は、移動を許すほど広がっていく。", type: "F", s: "混合" },
+        { t: "接続を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "移動" },
+        { t: "固定された分類より、接続によって生まれる関係を重視したい。", type: "F", s: "接続" },
+        { t: "閉じた仕組みは、接続によって更新されるべきだ。", type: "F", s: "開放" },
+        { t: "人の可能性は、接続を許すほど広がっていく。", type: "F", s: "交差" },
+        { t: "開放を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "流動" },
+        { t: "固定された分類より、開放によって生まれる関係を重視したい。", type: "F", s: "変化" },
+        { t: "閉じた仕組みは、開放によって更新されるべきだ。", type: "F", s: "外部" },
+        { t: "人の可能性は、開放を許すほど広がっていく。", type: "F", s: "融合" },
+        { t: "交差を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "越境" },
+        { t: "固定された分類より、交差によって生まれる関係を重視したい。", type: "F", s: "混合" },
+        { t: "閉じた仕組みは、交差によって更新されるべきだ。", type: "F", s: "移動" },
+        { t: "人の可能性は、交差を許すほど広がっていく。", type: "F", s: "接続" },
+        { t: "流動を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "開放" },
+        { t: "固定された分類より、流動によって生まれる関係を重視したい。", type: "F", s: "交差" },
+        { t: "閉じた仕組みは、流動によって更新されるべきだ。", type: "F", s: "流動" },
+        { t: "人の可能性は、流動を許すほど広がっていく。", type: "F", s: "変化" },
+        { t: "変化を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "外部" },
+        { t: "固定された分類より、変化によって生まれる関係を重視したい。", type: "F", s: "融合" },
+        { t: "閉じた仕組みは、変化によって更新されるべきだ。", type: "F", s: "越境" },
+        { t: "人の可能性は、変化を許すほど広がっていく。", type: "F", s: "混合" },
+        { t: "外部を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "移動" },
+        { t: "固定された分類より、外部によって生まれる関係を重視したい。", type: "F", s: "接続" },
+        { t: "閉じた仕組みは、外部によって更新されるべきだ。", type: "F", s: "開放" },
+        { t: "人の可能性は、外部を許すほど広がっていく。", type: "F", s: "交差" },
+        { t: "融合を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "流動" },
+        { t: "固定された分類より、融合によって生まれる関係を重視したい。", type: "F", s: "変化" },
+        { t: "閉じた仕組みは、融合によって更新されるべきだ。", type: "F", s: "外部" },
+        { t: "人の可能性は、融合を許すほど広がっていく。", type: "F", s: "融合" },
+        { t: "被害が広がる前に、多少強引でも介入するべきだ。", type: "G", s: "介入" },
+        { t: "緊急時には、合意形成よりも実行速度を優先すべきだ。", type: "G", s: "決断" },
+        { t: "問題を見つけたなら、観察だけでなくすぐに手を打つ必要がある。", type: "G", s: "速度" },
+        { t: "判断が遅れたことで失われるものは、慎重さで得るものより大きい。", type: "G", s: "実行" },
+        { t: "危険な状況では、当事者の判断を待たずに止めるべき場面がある。", type: "G", s: "緊急" },
+        { t: "不完全な計画でも、動きながら修正する方がよい。", type: "G", s: "処置" },
+        { t: "社会問題は、長い議論よりもまず試験的に介入して結果を見るべきだ。", type: "G", s: "制圧" },
+        { t: "責任ある立場の人は、迷っている時間にも責任を負うべきだ。", type: "G", s: "救出" },
+        { t: "問題の芽は、小さいうちに処理した方が被害は少ない。", type: "G", s: "試行" },
+        { t: "誰かが傷ついているなら、外野であっても行動する理由になる。", type: "G", s: "行動" },
+        { t: "介入が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "介入" },
+        { t: "迷い続けるより、不完全でも介入してから修正する方がよい。", type: "G", s: "決断" },
+        { t: "危険が見えたなら、早い介入こそが責任ある態度だ。", type: "G", s: "速度" },
+        { t: "現実を変えるには、観測より介入が必要になる瞬間がある。", type: "G", s: "実行" },
+        { t: "決断が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "緊急" },
+        { t: "迷い続けるより、不完全でも決断してから修正する方がよい。", type: "G", s: "処置" },
+        { t: "危険が見えたなら、早い決断こそが責任ある態度だ。", type: "G", s: "制圧" },
+        { t: "現実を変えるには、観測より決断が必要になる瞬間がある。", type: "G", s: "救出" },
+        { t: "速度が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "試行" },
+        { t: "迷い続けるより、不完全でも速度してから修正する方がよい。", type: "G", s: "行動" },
+        { t: "危険が見えたなら、早い速度こそが責任ある態度だ。", type: "G", s: "介入" },
+        { t: "現実を変えるには、観測より速度が必要になる瞬間がある。", type: "G", s: "決断" },
+        { t: "実行が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "速度" },
+        { t: "迷い続けるより、不完全でも実行してから修正する方がよい。", type: "G", s: "実行" },
+        { t: "危険が見えたなら、早い実行こそが責任ある態度だ。", type: "G", s: "緊急" },
+        { t: "現実を変えるには、観測より実行が必要になる瞬間がある。", type: "G", s: "処置" },
+        { t: "緊急が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "制圧" },
+        { t: "迷い続けるより、不完全でも緊急してから修正する方がよい。", type: "G", s: "救出" },
+        { t: "危険が見えたなら、早い緊急こそが責任ある態度だ。", type: "G", s: "試行" },
+        { t: "現実を変えるには、観測より緊急が必要になる瞬間がある。", type: "G", s: "行動" },
+        { t: "処置が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "介入" },
+        { t: "迷い続けるより、不完全でも処置してから修正する方がよい。", type: "G", s: "決断" },
+        { t: "危険が見えたなら、早い処置こそが責任ある態度だ。", type: "G", s: "速度" },
+        { t: "現実を変えるには、観測より処置が必要になる瞬間がある。", type: "G", s: "実行" },
+        { t: "制圧が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "緊急" },
+        { t: "迷い続けるより、不完全でも制圧してから修正する方がよい。", type: "G", s: "処置" },
+        { t: "危険が見えたなら、早い制圧こそが責任ある態度だ。", type: "G", s: "制圧" },
+        { t: "現実を変えるには、観測より制圧が必要になる瞬間がある。", type: "G", s: "救出" },
+        { t: "救出が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "試行" },
+        { t: "迷い続けるより、不完全でも救出してから修正する方がよい。", type: "G", s: "行動" },
+        { t: "危険が見えたなら、早い救出こそが責任ある態度だ。", type: "G", s: "介入" },
+        { t: "現実を変えるには、観測より救出が必要になる瞬間がある。", type: "G", s: "決断" },
+        { t: "試行が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "速度" },
+        { t: "迷い続けるより、不完全でも試行してから修正する方がよい。", type: "G", s: "実行" },
+        { t: "危険が見えたなら、早い試行こそが責任ある態度だ。", type: "G", s: "緊急" },
+        { t: "現実を変えるには、観測より試行が必要になる瞬間がある。", type: "G", s: "処置" },
+        { t: "行動が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "制圧" },
+        { t: "迷い続けるより、不完全でも行動してから修正する方がよい。", type: "G", s: "救出" },
+        { t: "危険が見えたなら、早い行動こそが責任ある態度だ。", type: "G", s: "試行" },
+        { t: "現実を変えるには、観測より行動が必要になる瞬間がある。", type: "G", s: "行動" },
+        { t: "問題が起きても、すぐに介入するより経過を見るべき場面が多い。", type: "H", s: "観測" },
+        { t: "人や社会には、外から変えられる前に自分で変わる時間が必要だ。", type: "H", s: "保留" },
+        { t: "急いだ解決は、見えていない副作用を生むことがある。", type: "H", s: "熟成" },
+        { t: "十分な観測なしに手を出すことは、善意でも危険になり得る。", type: "H", s: "非介入" },
+        { t: "動かないことも、状況を壊さないための重要な判断だ。", type: "H", s: "距離" },
+        { t: "問題の原因が見えるまで、強い処置は避けるべきだ。", type: "H", s: "検討" },
+        { t: "当事者が自分で選ぶ余地を残すために、外部の介入は控えめでよい。", type: "H", s: "自然推移" },
+        { t: "短期的な改善より、長い時間をかけた自然な変化を重視したい。", type: "H", s: "余白" },
+        { t: "すぐに結論を出さず、複数の可能性を保留する姿勢が必要だ。", type: "H", s: "待機" },
+        { t: "観測し続けることでしか見えない真実がある。", type: "H", s: "静観" },
+        { t: "観測の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "観測" },
+        { t: "すぐに結論を出すより、観測によって状況を理解したい。", type: "H", s: "保留" },
+        { t: "外から動かす前に、観測を尊重すべき場面がある。", type: "H", s: "熟成" },
+        { t: "強い介入より、観測が結果的に人を守ることがある。", type: "H", s: "非介入" },
+        { t: "保留の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "距離" },
+        { t: "すぐに結論を出すより、保留によって状況を理解したい。", type: "H", s: "検討" },
+        { t: "外から動かす前に、保留を尊重すべき場面がある。", type: "H", s: "自然推移" },
+        { t: "強い介入より、保留が結果的に人を守ることがある。", type: "H", s: "余白" },
+        { t: "熟成の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "待機" },
+        { t: "すぐに結論を出すより、熟成によって状況を理解したい。", type: "H", s: "静観" },
+        { t: "外から動かす前に、熟成を尊重すべき場面がある。", type: "H", s: "観測" },
+        { t: "強い介入より、熟成が結果的に人を守ることがある。", type: "H", s: "保留" },
+        { t: "非介入の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "熟成" },
+        { t: "すぐに結論を出すより、非介入によって状況を理解したい。", type: "H", s: "非介入" },
+        { t: "外から動かす前に、非介入を尊重すべき場面がある。", type: "H", s: "距離" },
+        { t: "強い介入より、非介入が結果的に人を守ることがある。", type: "H", s: "検討" },
+        { t: "距離の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "自然推移" },
+        { t: "すぐに結論を出すより、距離によって状況を理解したい。", type: "H", s: "余白" },
+        { t: "外から動かす前に、距離を尊重すべき場面がある。", type: "H", s: "待機" },
+        { t: "強い介入より、距離が結果的に人を守ることがある。", type: "H", s: "静観" },
+        { t: "検討の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "観測" },
+        { t: "すぐに結論を出すより、検討によって状況を理解したい。", type: "H", s: "保留" },
+        { t: "外から動かす前に、検討を尊重すべき場面がある。", type: "H", s: "熟成" },
+        { t: "強い介入より、検討が結果的に人を守ることがある。", type: "H", s: "非介入" },
+        { t: "自然推移の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "距離" },
+        { t: "すぐに結論を出すより、自然推移によって状況を理解したい。", type: "H", s: "検討" },
+        { t: "外から動かす前に、自然推移を尊重すべき場面がある。", type: "H", s: "自然推移" },
+        { t: "強い介入より、自然推移が結果的に人を守ることがある。", type: "H", s: "余白" },
+        { t: "余白の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "待機" },
+        { t: "すぐに結論を出すより、余白によって状況を理解したい。", type: "H", s: "静観" },
+        { t: "外から動かす前に、余白を尊重すべき場面がある。", type: "H", s: "観測" },
+        { t: "強い介入より、余白が結果的に人を守ることがある。", type: "H", s: "保留" },
+        { t: "待機の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "熟成" },
+        { t: "すぐに結論を出すより、待機によって状況を理解したい。", type: "H", s: "非介入" },
+        { t: "外から動かす前に、待機を尊重すべき場面がある。", type: "H", s: "距離" },
+        { t: "強い介入より、待機が結果的に人を守ることがある。", type: "H", s: "検討" },
+        { t: "静観の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "自然推移" },
+        { t: "すぐに結論を出すより、静観によって状況を理解したい。", type: "H", s: "余白" },
+        { t: "外から動かす前に、静観を尊重すべき場面がある。", type: "H", s: "待機" },
+        { t: "強い介入より、静観が結果的に人を守ることがある。", type: "H", s: "静観" }
+    ];
+
+    // --- Results Data ---
+    const resultsData = {
+        // --- Plus Types (Fanatic) ---
+        "A+": { title: "[A+] 絶対純血主義 (Purist Zealot)", quote: "「一滴の濁りも許さない。完全なる白こそが正義だ。」", desc: "【回帰淘汰・極】<br>あなたは極めて強力な秩序の守護者です。不純物や異端に対する許容度はゼロに等しく、理想の世界のためならあらゆる犠牲を正当化します。その潔癖さは神聖ですが、同時に息苦しいほどの抑圧を生むでしょう。", color: "#ff0033" },
+        "B+": { title: "[B+] 無限博愛主義 (Saint)", quote: "「全ての罪を赦そう。私がその身代わりになる。」", desc: "【共命包摂・極】<br>自己を完全に滅却して他者に尽くす、聖人のような精神性です。敵対する者さえも愛そうとしますが、その無制限の受容は、悪意ある者につけ込まれ、組織や社会を内部から崩壊させる隙にもなり得ます。", color: "#00ff88" },
+        "C+": { title: "[C+] 超越進化主義 (Singularity)", quote: "「肉体は枷だ。人間であることを辞める時が来た。」", desc: "【適応進転・極】<br>進化のためなら倫理も感情も人間性も躊躇なく捨て去るマッドサイエンティスト的思考です。もはやあなたは人類という種の枠組みを超え、新たな知的生命体へと変貌しようとしています。", color: "#0066ff" },
+        "D+": { title: "[D+] 全一集合主義 (The One)", quote: "「個は幻影に過ぎない。我々は一つに溶け合うのだ。」", desc: "【無差総質・極】<br>個人の自我を完全に否定し、全体意識との融合を渇望しています。あなたにとって孤独とは死以上の恐怖であり、全ての境界線が消滅した海のような意識状態こそが至高の幸福です。", color: "#888888" },
+
+        // --- Minus Types (Moderate) ---
+        "A-": { title: "[A-] 秩序維持派 (Order Keeper)", quote: "「自由には責任が伴う。最低限のルールは必要だ。」", desc: "【回帰淘汰・穏】<br>カオスを嫌いますが、過度な排除は行いません。社会システムの安定と継続性を重視する、現実的な保守派です。変化には慎重ですが、それは守るべきものがあるという責任感の表れです。", color: "#ff6b81" },
+        "B-": { title: "[B-] 現状肯定派 (Status Quo)", quote: "「無理に変える必要はない。今のままで十分幸せだ。」", desc: "【共命包摂・穏】<br>急激な改革や争いを避け、今の日常を大切にしたいと願っています。消極的ですが、最も平和的な隣人です。大きな理想よりも、手の届く範囲の平穏を守ることを選びます。", color: "#7bed9f" },
+        "C-": { title: "[C-] 合理改善派 (Pragmatist)", quote: "「より良くできるなら、道具を使わない手はない。」", desc: "【適応進転・穏】<br>テクノロジーや新しい手法を柔軟に取り入れる合理主義者です。人間性を捨てるつもりはありませんが、不便や非効率は我慢なりません。ドライに見えますが、実は最も建設的です。", color: "#70a1ff" },
+        "D-": { title: "[D-] 公平追求派 (Fairness)", quote: "「生まれによる不平等は、できるだけ是正すべきだ。」", desc: "【無差総質・穏】<br>完全な同一化までは求めませんが、チャンスの平等や公正さを重視します。特権階級や理不尽な格差を嫌う、健全な民主的感覚の持ち主です。バランス感覚に優れています。", color: "#ced6e0" },
+
+        // --- Hybrid Types (2-way) ---
+        AB: { title: "[AB] 聖域守護主義 (Guardian)", quote: "「この庭の平穏だけは、何としても死守する。」", desc: "【回帰淘汰 × 共命包摂】<br>内側の者には無限の愛を注ぎますが、外敵には容赦ない排他性を発揮します。家族や仲間を守るためなら鬼になれる、閉鎖的な楽園の管理者です。", color: "#eebb44" },
+        AC: { title: "[AC] 完全主義的独裁 (Perfectionist)", quote: "「選ばれた優秀な者が、さらに進化する。」", desc: "【回帰淘汰 × 適応進転】<br>弱者を切り捨て、残った強者をさらに強化しようとするエリート思想。強烈なカリスマ性を持ちますが、弱者にとっては地獄のような世界を作るでしょう。", color: "#a29bfe" },
+        AD: { title: "[AD] 統制全体主義 (Totalitarian)", quote: "「乱れなき行進。例外は許されない。」", desc: "【回帰淘汰 × 無差総質】<br>秩序維持のために、個性を徹底的に排除する管理社会の理想形。すべての市民が同じ規格、同じ思想で動く、美しくも恐ろしい機械仕掛けの世界を望みます。", color: "#ff6b81" },
+        BC: { title: "[BC] 全救済進化主義 (Uplift)", quote: "「誰も置き去りにしない。全員で神になる。」", desc: "【共命包摂 × 適応進転】<br>弱者を切り捨てるのではなく、技術や教育で全員を強者へ引き上げようとする理想家。コストと時間がかかりすぎ、破綻する可能性が高い夢物語でもあります。", color: "#00d2d3" },
+        BD: { title: "[BD] 平和的停滞 (Peace Keeper)", quote: "「みんな違ってみんないい。でも、同じならもっといい。」", desc: "【共命包摂 × 無差総質】<br>争いを極端に恐れる事なかれ主義。多様性を認めつつも、本音では波風の立たない均質な世界を望んでいます。優しいディストピアの住人です。", color: "#55efc4" },
+        CD: { title: "[CD] 集合知性主義 (Hive Mind)", quote: "「個を捨てよ。全となりて永遠を生きよ。」", desc: "【適応進転 × 無差総質】<br>個人の限界を技術で突破し、意識を統合することで進化しようとする思想。SF的な集合精神（ボーグや群体）こそが、人類の最終到達点だと信じています。", color: "#54a0ff" },
+
+        // --- Tri-brid Types (3-way) ---
+        ABC: { title: "[ABC] 超越的統治主義 (Overlord)", quote: "「全能なる父として、世界を導こう。」", desc: "【D(平等)欠落】<br>秩序、慈愛、進化を兼ね備えた理想的な「王」の思想ですが、そこに対等な関係はありません。あなたは民を愛し導きますが、民があなたに意見することは許されないでしょう。", color: "#ffffff" },
+        ABD: { title: "[ABD] 停滞楽園主義 (Lotus Eater)", quote: "「永遠の微睡の中で、痛みだけを忘れて。」", desc: "【C(進化)欠落】<br>秩序と慈愛に満ち、争いのない平等な世界。しかし、そこには成長も変化もありません。飼い慣らされたペットのように、ただ穏やかに死を待つだけの美しい箱庭です。", color: "#88ffcc" },
+        ACD: { title: "[ACD] 機械的収束主義 (The System)", quote: "「感情は不要。最適な解だけを出力せよ。」", desc: "【B(慈愛)欠落】<br>極めて効率的で、秩序立ち、平等な社会。しかし、そこに人の心や不合理な優しさは存在しません。完全無欠なシステムの一部として機能することだけが求められます。", color: "#aaddff" },
+        BCD: { title: "[BCD] 原初混沌主義 (Primordial Soup)", quote: "「全ては混ざり合い、生まれ変わり続ける。」", desc: "【A(規律)欠落】<br>あらゆる命が肯定され、混ざり合い、変化し続ける生命のスープ。そこには境界線も秩序もありません。圧倒的な生命力に満ちていますが、個としての輪郭を保つことは困難でしょう。", color: "#ffaaee" },
+
+        // --- Deep Precision Types (50+ Questions only) ---
+        "A++": { title: "[A++] 絶対純血主義・深層型 (Absolute Purist)", quote: "「赦しは濁りだ。境界線の内側だけが世界であればいい。」", desc: "【回帰淘汰・極限】<br>あなたは秩序・伝統・選別を極端に強く支持し、対立する包摂や赦しの感覚がほとんど入り込まない状態です。単なる保守ではなく、世界を清潔な中心へ収束させたいという強烈な純化衝動を持っています。", color: "#ff1744" },
+        "B++": { title: "[B++] 無限博愛主義・殉教型 (Absolute Saint)", quote: "「誰も捨てない。たとえその重さで世界ごと沈むとしても。」", desc: "【共命包摂・極限】<br>あなたは救済・赦し・共生を極端に強く支持し、対立する選別や排除の感覚がほとんどありません。合理性や秩序よりも、最後の一人を置き去りにしないことを選ぶ、非常に強い包摂衝動を持っています。", color: "#00ff99" },
+        "C++": { title: "[C++] 超越進化主義・脱人間型 (Post-Human Singularity)", quote: "「人間のままでいる理由は、もう残っていない。」", desc: "【適応進転・極限】<br>あなたは技術・更新・最適化を極端に強く支持し、対立する同質的な停滞や平準化をほとんど求めません。人間らしさを守るより、人間という形式そのものを突破することに強く惹かれています。", color: "#2979ff" },
+        "D++": { title: "[D++] 全一集合主義・完全溶解型 (Absolute One)", quote: "「違いが消えれば、痛みも争いも消える。」", desc: "【無差総質・極限】<br>あなたは平等・同質・共有を極端に強く支持し、対立する進化や突出への欲求がほとんどありません。個人差を守るより、差異そのものを薄め、全体が一つの静かな面になることを理想とします。", color: "#b0bec5" },
+
+        "!A": { title: "[!A] 無境界流動型 (Borderless Flux)", quote: "「中心などいらない。流れ続けることこそが自由だ。」", desc: "【A欠落】<br>秩序・伝統・線引きへの反応だけが極端に弱いタイプです。包摂、進化、平等化には反応しても、固定された中心や守るべき型にはほとんど惹かれません。開放的ですが、輪郭のなさが不安定さにつながることもあります。", color: "#ff8a80" },
+        "!B": { title: "[!B] 無慈悲合理型 (Mercyless Logic)", quote: "「救えないものを数え続ける時間こそ、最大の損失だ。」", desc: "【B欠落】<br>慈愛・赦し・共存への反応だけが極端に弱いタイプです。秩序、改善、平準化には反応しても、弱さを抱えたまま受け入れる感覚には距離があります。決断力はありますが、他者からは冷たく見えやすいでしょう。", color: "#69f0ae" },
+        "!C": { title: "[!C] 停滞受容型 (Static Acceptance)", quote: "「変わらなくてもいい。変えないことで守れるものがある。」", desc: "【C欠落】<br>技術・更新・最適化への反応だけが極端に弱いタイプです。秩序、慈愛、平等には反応しても、未来へ作り替える衝動にはあまり乗りません。安定や人間味を守る一方で、改善の機会を逃しやすい面があります。", color: "#82b1ff" },
+        "!D": { title: "[!D] 個体突出型 (Singular Individualism)", quote: "「同じになるくらいなら、孤独でも尖っていたい。」", desc: "【D欠落】<br>同質化・平準化・共有への反応だけが極端に弱いタイプです。秩序、慈愛、進化には反応しても、差を小さくすることには強い抵抗があります。個の輪郭を守る力が強い反面、格差や比較を受け入れやすい傾向があります。", color: "#eceff1" },
+
+        "N+": { title: "[N+] 完全均衡観測者 (High Balance Observer)", quote: "「四つの極は、すべて世界の正しさを少しずつ持っている。」", desc: "【高反応均衡】<br>A/B/C/Dのすべてに高い感度を示しながら、どれか一つに偏りきっていません。思想が薄いのではなく、秩序・慈愛・進化・平等の全てを同時に理解している状態です。分類不能ではなく、多極的な観測者です。", color: "#ffffff" },
+        "N-": { title: "[N-] 低反応中立者 (Low Signal Observer)", quote: "「まだ、どの旗の下にも立つ気はない。」", desc: "【低反応均衡】<br>A/B/C/Dの差が小さく、かつ全体の反応も控えめです。強い思想的確信よりも保留、様子見、距離感が目立ちます。中立的で冷静ですが、結果として輪郭が出にくいタイプでもあります。", color: "#cfd8dc" },
+        "∅": { title: "[∅] 空白応答型 (Null Response)", quote: "「判断しない、という判断。」", desc: "【判定保留】<br>「どちらとも言えない」が非常に多く、思想傾向よりも診断への距離感が強く出ています。迷い、慎重さ、質問への違和感、または意図的な無反応が考えられます。結果を出すには、もう少し強く回答する必要があります。", color: "#78909c" },
+
+        "AB#": { title: "[AB#] 聖域矛盾型 (Sanctuary Paradox)", quote: "「守りたい。だが、拒みたくない。」", desc: "【回帰淘汰 × 共命包摂・矛盾】<br>線引きによって聖域を守りたい心と、誰も排除したくない心が同時に強く出ています。内側への愛は深い一方で、どこまでを内側に含めるかで強い葛藤が生まれやすいタイプです。", color: "#ffca28" },
+        "AC#": { title: "[AC#] 選別進化型 (Selective Ascension)", quote: "「選ばれた中心だけが、未来へ進む資格を持つ。」", desc: "【回帰淘汰 × 適応進転・先鋭】<br>純度と性能を同時に求めるタイプです。守るべき中心を固定しながら、その中心だけをさらに強く、速く、高く進化させようとします。理想は鋭いですが、外側への視線はかなり厳しくなります。", color: "#7c4dff" },
+        "AD#": { title: "[AD#] 無菌統制型 (Sterile Order)", quote: "「全員が同じ手順で動くなら、世界は汚れない。」", desc: "【回帰淘汰 × 無差総質・統制】<br>例外・突出・乱れを強く嫌い、清潔で均一な管理状態を好みます。秩序の美しさと平等な静けさが合体したタイプで、安定性は高い一方、個人の自由はかなり圧縮されやすいでしょう。", color: "#ff8a9a" },
+        "BC#": { title: "[BC#] 全員救済改造型 (Universal Uplift)", quote: "「誰も置き去りにしない。そのために、全員を作り替える。」", desc: "【共命包摂 × 適応進転・救済】<br>弱者を切り捨てるのではなく、技術や制度で全員を引き上げようとするタイプです。優しさと合理性が同時に強く、救済のための改造を肯定しやすい傾向があります。", color: "#00e5ff" },
+        "BD#": { title: "[BD#] 優しい檻型 (Tender Cage)", quote: "「傷つかないように、みんな同じ毛布の中へ。」", desc: "【共命包摂 × 無差総質・揺籃】<br>誰も傷つかないように、差異や競争をやわらかく薄めたいタイプです。とても優しい思想ですが、安心を守るために個性の輪郭まで溶かしてしまう危険もあります。", color: "#64ffda" },
+        "CD#": { title: "[CD#] 集合知性臨界型 (Hive Threshold)", quote: "「個の限界は、接続によって消える。」", desc: "【適応進転 × 無差総質・集合】<br>技術によって個人差を調整し、全体として最適化された集合知性を目指すタイプです。進化と均質化が同時に強く、個人よりもネットワーク化された全体に未来を見ます。", color: "#40c4ff" },
+
+        NEUTRAL: { title: "[N] 中立主義的思考 (The Observer)", quote: "「世界の天秤を眺める観測者」", desc: "どの思想にも理解を示し、同時に距離を置いています。バランサーとして機能しますが、決断を下せず時代の波に流されるだけの存在になる危険性もあります。", color: "#ffffff" }
+    };
+
+    // --- Advance Axis Results Data ---
+    const advanceResultsData = {
+        E: { title: "[E] 境界固定型", quote: "「線を引くことは、守ることでもある。」", desc: "所属・責任・内外の線引きを重視する補助軸です。主思想が何であっても、運用では範囲や資格を明確にしたがります。", color: "#ffb020" },
+        F: { title: "[F] 境界流動型", quote: "「境界は越えるためにも存在する。」", desc: "混合・移動・接続を重視する補助軸です。固定された役割や所属より、状況に応じて変わる関係を好みます。", color: "#c084fc" },
+        G: { title: "[G] 即応介入型", quote: "「見えた問題には、今すぐ手を伸ばす。」", desc: "速度・実行・介入を重視する補助軸です。長い議論よりも、被害が広がる前に行動することを選びやすいタイプです。", color: "#f97316" },
+        H: { title: "[H] 観測保留型", quote: "「動かないことも、判断の一つだ。」", desc: "観測・保留・非介入を重視する補助軸です。すぐに手を出すより、状況が自然に見えてくるまで待つことを好みます。", color: "#14b8a6" },
+        "E++": { title: "[E++] 絶対境界型", quote: "「ここから先は、選ばれた者だけが入れる。」", desc: "境界固定が極端に強く、対立する流動性がほとんどありません。共同体・権限・資格の線引きを非常に強く求めます。", color: "#ffb020" },
+        "F++": { title: "[F++] 完全越境型", quote: "「どこにも属さず、すべてへ接続する。」", desc: "境界流動が極端に強く、固定された線引きをほとんど求めません。所属や役割を越えて変わり続けることに強く惹かれます。", color: "#c084fc" },
+        "G++": { title: "[G++] 即時介入型", quote: "「遅れた正義は、もはや正義ではない。」", desc: "即応介入が極端に強く、観測や保留をほとんど選びません。問題を見たらただちに動く、強い実行志向です。", color: "#f97316" },
+        "H++": { title: "[H++] 完全観測型", quote: "「世界は、触れずに見つめることで姿を現す。」", desc: "観測保留が極端に強く、即時介入をほとんど選びません。動かすよりも見守ることに価値を置く、徹底した静観志向です。", color: "#14b8a6" },
+        EG: { title: "[EG] 境界介入型", quote: "「線を引き、必要ならすぐ守る。」", desc: "境界固定と即応介入が強い型です。守る範囲を明確にし、危険が見えたらすぐに処置する運用傾向です。", color: "#fb923c" },
+        EH: { title: "[EH] 境界保留型", quote: "「線は引く。ただし、動く前に観測する。」", desc: "境界固定と観測保留が強い型です。内外の区別は重視しますが、介入には慎重で、時間をかけて判断します。", color: "#fbbf24" },
+        FG: { title: "[FG] 流動介入型", quote: "「境界を越え、ただちに変える。」", desc: "境界流動と即応介入が強い型です。固定された枠を越えながら、現実へすばやく手を入れる変革志向です。", color: "#d946ef" },
+        FH: { title: "[FH] 流動観測型", quote: "「流れを止めず、変化を見届ける。」", desc: "境界流動と観測保留が強い型です。混ざり合う変化を受け入れつつ、強制的には動かさない柔らかな運用傾向です。", color: "#8b5cf6" },
+        EF: { title: "[EF] 境界矛盾型", quote: "「線を引きたい。だが、その線を越えたい。」", desc: "境界固定と境界流動が同時に高い矛盾型です。守るべき内側を求めながら、外部との混合にも強く反応します。", color: "#eab308" },
+        GH: { title: "[GH] 介入矛盾型", quote: "「今すぐ動きたい。だが、まだ見ていたい。」", desc: "即応介入と観測保留が同時に高い矛盾型です。行動衝動と慎重な観測がぶつかりやすい補助結果です。", color: "#22c55e" },
+        N: { title: "[N] 補助軸中立", quote: "「運用方針はまだ一方向に定まっていない。」", desc: "E/F/G/Hの差が小さく、補助軸としては中立的です。主思想をどう運用するかが状況によって変わりやすいタイプです。", color: "#cfd8dc" }
+    };
+
+    // --- State ---
+    let activeQuestions = [];
+    let answerHistory = [];
+    let currentQIndex = 0;
+    const MAIN_TYPES = ['A', 'B', 'C', 'D'];
+    const ADVANCE_TYPES = ['E', 'F', 'G', 'H'];
+    const ALL_TYPES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const TYPE_LABELS = { A: '回帰淘汰', B: '共命包摂', C: '適応進転', D: '無差総質', E: '境界固定', F: '境界流動', G: '即応介入', H: '観測保留' };
+    let scores = createScoreObject(ALL_TYPES);
+    let maxPossibleScore = createScoreObject(ALL_TYPES);
+    let currentMode = 'desktop';
+    let currentTheme = ['light', 'dark'].includes(localStorage.getItem('mtps-theme')) ? localStorage.getItem('mtps-theme') : 'dark';
+    let currentCourse = { id: 'STANDARD', label: 'STANDARD', count: 25 };
+    let pendingCourseCount = null;
+    let pendingWarningScreen = null;
+    let currentQuestionSetMeta = { method: '未生成', seedLabel: '', typeCounts: createScoreObject(ALL_TYPES, 0) };
+
+    // Course-specific evaluation settings.
+    // STANDARD / LIGHT use stable balanced sampling to avoid result gacha.
+    // HEAVY/MAX use broad or full question sets with weight correction. MAX is balanced to A/B/C/D = 50 each.
+    const quizModes = {
+        24: {
+            id: 'STANDARD',
+            label: 'STANDARD',
+            count: 24,
+            selection: 'stable-balanced',
+            evaluation: 'rounded-normalized',
+            neutralSD: 7.5,
+            hybridDiff: 10.0,
+            triDiff: 7.0,
+            plusLine: 0.42,
+            shareName: 'STANDARD / 24問',
+            selectionLabel: '固定バランス抽出'
+        },
+        48: {
+            id: 'LIGHT',
+            label: 'LIGHT PRECISION',
+            count: 48,
+            selection: 'stable-balanced',
+            evaluation: 'normalized',
+            neutralSD: 6.5,
+            hybridDiff: 8.0,
+            triDiff: 5.5,
+            plusLine: 0.48,
+            shareName: 'LIGHT PRECISION / 48問',
+            selectionLabel: '固定バランス抽出'
+        },
+        72: {
+            id: 'MEDIUM',
+            label: 'MEDIUM PRECISION',
+            count: 72,
+            selection: 'stable-balanced',
+            evaluation: 'normalized',
+            neutralSD: 5.8,
+            hybridDiff: 7.0,
+            triDiff: 4.8,
+            plusLine: 0.52,
+            shareName: 'MEDIUM PRECISION / 72問',
+            selectionLabel: '固定バランス抽出'
+        },
+        100: {
+            id: 'HEAVY',
+            label: 'HEAVY PRECISION',
+            count: 100,
+            selection: 'stable-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 5.0,
+            hybridDiff: 6.0,
+            triDiff: 4.0,
+            plusLine: 0.55,
+            shareName: 'HEAVY PRECISION / 100問',
+            selectionLabel: '固定バランス抽出'
+        },
+        200: {
+            id: 'MAX',
+            label: 'MAX PRECISION',
+            count: 200,
+            selection: 'all-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 4.0,
+            hybridDiff: 4.5,
+            triDiff: 3.0,
+            plusLine: 0.60,
+            shareName: 'MAX PRECISION / 200問',
+            selectionLabel: '全問バランス補正'
+        },
+        40: {
+            id: 'ADV_STANDARD',
+            label: 'ADVANCE STANDARD',
+            count: 40,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'rounded-normalized',
+            neutralSD: 7.5,
+            hybridDiff: 10.0,
+            triDiff: 7.0,
+            plusLine: 0.42,
+            shareName: 'ADVANCE STANDARD / 40問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        96: {
+            id: 'ADV_LIGHT',
+            label: 'ADVANCE LIGHT PRECISION',
+            count: 96,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'normalized',
+            neutralSD: 6.0,
+            hybridDiff: 7.0,
+            triDiff: 5.0,
+            plusLine: 0.48,
+            shareName: 'ADVANCE LIGHT PRECISION / 96問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        144: {
+            id: 'ADV_MEDIUM',
+            label: 'ADVANCE MEDIUM PRECISION',
+            count: 144,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'normalized',
+            neutralSD: 5.5,
+            hybridDiff: 6.5,
+            triDiff: 4.5,
+            plusLine: 0.52,
+            shareName: 'ADVANCE MEDIUM PRECISION / 144問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        201: {
+            id: 'ADV_HEAVY',
+            label: 'ADVANCE HEAVY PRECISION',
+            count: 200,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 5.0,
+            hybridDiff: 6.0,
+            triDiff: 4.0,
+            plusLine: 0.55,
+            shareName: 'ADVANCE HEAVY PRECISION / 200問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        400: {
+            id: 'ADV_MAX',
+            label: 'ADVANCE MAX PRECISION',
+            count: 400,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 4.0,
+            hybridDiff: 4.5,
+            triDiff: 3.0,
+            plusLine: 0.60,
+            shareName: 'ADVANCE MAX PRECISION / 400問',
+            selectionLabel: 'A〜H全問バランス補正'
+        }
+
+    };
+
+    // --- DOM Elements ---
+    const deviceScreen = document.getElementById('device-screen');
+    const warningScreen = document.getElementById('warning-screen');
+    const advanceMaxWarningScreen = document.getElementById('advance-max-warning-screen');
+    const noticeScreen = document.getElementById('notice-screen');
+    const creditScreen = document.getElementById('credit-screen');
+    const historyScreen = document.getElementById('history-screen');
+    const publicStatsScreen = document.getElementById('public-stats-screen');
+    const introScreen = document.getElementById('intro-screen');
+    const quizScreen = document.getElementById('quiz-screen');
+    const resultScreen = document.getElementById('result-screen');
+    const databaseScreen = document.getElementById('database-screen');
+    const body = document.body;
+
+    // --- UI Logic ---
+    function applyTheme(theme) {
+        currentTheme = theme === 'light' ? 'light' : 'dark';
+        localStorage.setItem('mtps-theme', currentTheme);
+        body.classList.remove('theme-light', 'theme-dark');
+        body.classList.add(`theme-${currentTheme}`);
+        const toggle = document.getElementById('theme-toggle');
+        if (toggle) {
+            toggle.textContent = currentTheme === 'light' ? 'DARK MODE' : 'LIGHT MODE';
+        }
+    }
+
+    function toggleTheme() {
+        applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+    }
+
+    applyTheme(currentTheme);
+    restoreCoursePanel();
+
+    function setMode(mode) {
+        currentMode = mode;
+        body.className = `mode-${mode} theme-${currentTheme}`;
+        const root = document.documentElement;
+
+        if (mode === 'mobile') {
+            root.style.setProperty('--container-width', '450px');
+            root.style.setProperty('--btn-height', '80px');
+            root.style.setProperty('--font-scale', '0.9');
+        } else {
+            root.style.setProperty('--container-width', '900px');
+            root.style.setProperty('--btn-height', '60px');
+            root.style.setProperty('--font-scale', '1');
+        }
+
+        switchScreen(deviceScreen, introScreen);
+    }
+
+    function goToIntro() {
+        switchScreen(warningScreen, introScreen);
+    }
+
+    function switchScreen(from, to) {
+        if (currentMode === 'mobile') {
+            from.classList.remove('active');
+            from.style.opacity = 0;
+            to.classList.add('active');
+            gsap.fromTo(to, {opacity: 0}, {opacity: 1, duration: 0.5});
+        } else {
+            gsap.to(from, {
+                opacity: 0, 
+                duration: 0.3, 
+                onComplete: () => {
+                    from.classList.remove('active');
+                    to.classList.add('active');
+                    gsap.fromTo(to, {opacity: 0, scale: 0.95}, {opacity: 1, scale: 1, duration: 0.5, ease: "power2.out"});
+                }
+            });
+        }
+    }
+
+
+
+    function setCoursePanel(panel) {
+        const isAdvance = panel === 'advance';
+        const normalPanel = document.getElementById('normal-course-panel');
+        const advancePanel = document.getElementById('advance-course-panel');
+        const normalBtn = document.getElementById('normal-tab-btn');
+        const advanceBtn = document.getElementById('advance-tab-btn');
+
+        if (normalPanel && advancePanel) {
+            normalPanel.classList.toggle('active', !isAdvance);
+            advancePanel.classList.toggle('active', isAdvance);
+        }
+        if (normalBtn && advanceBtn) {
+            normalBtn.classList.toggle('active', !isAdvance);
+            advanceBtn.classList.toggle('active', isAdvance);
+        }
+
+        try {
+            localStorage.setItem('mtps-course-panel', isAdvance ? 'advance' : 'normal');
+        } catch (e) {}
+    }
+
+    function restoreCoursePanel() {
+        let savedPanel = 'normal';
+        try {
+            savedPanel = localStorage.getItem('mtps-course-panel') === 'advance' ? 'advance' : 'normal';
+        } catch (e) {}
+        setCoursePanel(savedPanel);
+    }
+
+    function showCourseWarning(count) {
+        pendingCourseCount = count;
+        pendingWarningScreen = count === 400 ? advanceMaxWarningScreen : warningScreen;
+        switchScreen(introScreen, pendingWarningScreen);
+    }
+
+    function hideCourseWarning() {
+        const screen = pendingWarningScreen || warningScreen;
+        pendingCourseCount = null;
+        pendingWarningScreen = null;
+        switchScreen(screen, introScreen);
+    }
+
+    function confirmCourseWarning() {
+        const count = pendingCourseCount || 200;
+        const screen = pendingWarningScreen || warningScreen;
+        pendingCourseCount = null;
+        pendingWarningScreen = null;
+        startQuiz(count, screen);
+    }
+
+    function showMainNotice() {
+        switchScreen(introScreen, noticeScreen);
+    }
+
+    function hideMainNotice() {
+        switchScreen(noticeScreen, introScreen);
+    }
+
+    function showCredit() {
+        switchScreen(introScreen, creditScreen);
+    }
+
+    function hideCredit() {
+        switchScreen(creditScreen, introScreen);
+    }
+
+    function showHistory() {
+        renderHistory();
+        switchScreen(introScreen, historyScreen);
+    }
+
+    function hideHistory() {
+        switchScreen(historyScreen, introScreen);
+    }
+
+    function showPublicStats() {
+        renderPublicStats();
+        switchScreen(introScreen, publicStatsScreen);
+    }
+
+    function hidePublicStats() {
+        switchScreen(publicStatsScreen, introScreen);
+    }
+
+    function showDatabase() {
+        renderDatabaseList();
+        switchScreen(introScreen, databaseScreen);
+    }
+
+    function hideDatabase() {
+        switchScreen(databaseScreen, introScreen);
+    }
+
+    function renderDatabaseList() {
+        const container = document.getElementById('db-list-container');
+        container.innerHTML = ''; // Clear previous content
+
+        const groups = {
+            standardFanatic: { title: "STANDARD対応：単独思想・熱狂派 (+)", items: [] },
+            standardModerate: { title: "STANDARD対応：単独思想・穏健派 (-)", items: [] },
+            standardHybrid: { title: "STANDARD対応：複合思想 (Hybrid / Tri-brid)", items: [] },
+            standardNeutral: { title: "STANDARD対応：特殊・中立", items: [] },
+            precisionExtreme: { title: "精密限定：極限単独型 (++)", items: [] },
+            precisionMissing: { title: "精密限定：欠落型 (!)", items: [] },
+            precisionNeutral: { title: "精密限定：特殊・中立", items: [] },
+            precisionHybrid: { title: "精密限定：矛盾複合型 (#)", items: [] },
+            advanceSingle: { title: "ADVANCE：補助軸・単独型", items: [] },
+            advanceExtreme: { title: "ADVANCE：補助軸・極限型 (++)", items: [] },
+            advanceComposite: { title: "ADVANCE：補助軸・複合型", items: [] },
+            advanceConflict: { title: "ADVANCE：補助軸・矛盾型", items: [] },
+            advanceNeutral: { title: "ADVANCE：補助軸・中立", items: [] }
+        };
+
+        for (const [key, data] of Object.entries(resultsData)) {
+            if (key.endsWith('++')) {
+                groups.precisionExtreme.items.push({key, ...data});
+            } else if (key.startsWith('!')) {
+                groups.precisionMissing.items.push({key, ...data});
+            } else if (key.endsWith('#')) {
+                groups.precisionHybrid.items.push({key, ...data});
+            } else if (key === 'N+' || key === 'N-' || key === '∅') {
+                groups.precisionNeutral.items.push({key, ...data});
+            } else if (key === 'NEUTRAL') {
+                groups.standardNeutral.items.push({key, ...data});
+            } else if (key.endsWith('+')) {
+                groups.standardFanatic.items.push({key, ...data});
+            } else if (key.endsWith('-')) {
+                groups.standardModerate.items.push({key, ...data});
+            } else {
+                groups.standardHybrid.items.push({key, ...data});
+            }
+        }
+
+        for (const [key, data] of Object.entries(advanceResultsData)) {
+            if (['E', 'F', 'G', 'H'].includes(key)) {
+                groups.advanceSingle.items.push({key, ...data});
+            } else if (key.endsWith('++')) {
+                groups.advanceExtreme.items.push({key, ...data});
+            } else if (key === 'EF' || key === 'GH') {
+                groups.advanceConflict.items.push({key, ...data});
+            } else if (key === 'N') {
+                groups.advanceNeutral.items.push({key, ...data});
+            } else {
+                groups.advanceComposite.items.push({key, ...data});
+            }
+        }
+
+        // Render STANDARD-compatible results first, then precision-only results, then Advance Axis results.
+        [
+            groups.standardFanatic,
+            groups.standardModerate,
+            groups.standardHybrid,
+            groups.standardNeutral,
+            groups.precisionExtreme,
+            groups.precisionMissing,
+            groups.precisionNeutral,
+            groups.precisionHybrid,
+            groups.advanceSingle,
+            groups.advanceExtreme,
+            groups.advanceComposite,
+            groups.advanceConflict,
+            groups.advanceNeutral
+        ].forEach(group => {
+            if (group.items.length === 0) return;
+
+            const groupTitle = document.createElement('h3');
+            groupTitle.className = 'db-group-title';
+            groupTitle.innerText = group.title;
+            container.appendChild(groupTitle);
+
+            const grid = document.createElement('div');
+            grid.className = 'db-grid';
+
+            group.items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'db-card';
+                card.style.borderLeftColor = item.color;
+                
+                // Get short desc (first line or sentence) for preview
+                const shortDesc = item.desc.split('。')[0] + '...';
+
+                card.innerHTML = `
+                    <h3>${item.key.replace("NEUTRAL", "N")} ${item.title}</h3>
+                    <span class="db-short-desc">${shortDesc}</span>
+                    <div class="db-details">
+                        <div class="db-detail-quote" style="font-style:italic; color:#aaa; margin-bottom:0.5rem; border-bottom:1px solid #444; padding-bottom:0.5rem;">${item.quote}</div>
+                        <div class="db-detail-desc" style="line-height:1.6;">${item.desc}</div>
+                    </div>
+                `;
+
+                // Add toggle event
+                card.onclick = function() {
+                    this.classList.toggle('active');
+                };
+
+                grid.appendChild(card);
+            });
+
+            container.appendChild(grid);
+        });
+    }
+
+    // --- Quiz Logic ---
+    
+    // Opposing Pairs map: A <-> B, C <-> D
+    const opposition = {
+        'A': 'B',
+        'B': 'A',
+        'C': 'D',
+        'D': 'C',
+        'E': 'F',
+        'F': 'E',
+        'G': 'H',
+        'H': 'G'
+    };
+
+    function createScoreObject(types = ALL_TYPES, initialValue = 0) {
+        return types.reduce((obj, type) => { obj[type] = initialValue; return obj; }, {});
+    }
+
+    function getActiveTypes() {
+        return currentCourse && currentCourse.isAdvance ? ALL_TYPES : MAIN_TYPES;
+    }
+
+    function hashStringToSeed(str) {
+        // Simple deterministic hash. Good enough for stable question ordering.
+        let h = 2166136261;
+        for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+
+    function seededRandom(seed) {
+        // Mulberry32 PRNG: deterministic, tiny, and browser-friendly.
+        return function() {
+            let t = seed += 0x6D2B79F5;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    function getStableCourseSeed(course) {
+        const storageKey = `mtps-stable-seed-v2-${course.id}-${course.count}`;
+        let seedText = '';
+
+        try {
+            seedText = localStorage.getItem(storageKey) || '';
+            if (!seedText) {
+                seedText = `${course.id}-${course.count}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                localStorage.setItem(storageKey, seedText);
+            }
+        } catch (e) {
+            // In private browsing or restricted environments, localStorage may fail.
+            seedText = `${course.id}-${course.count}-fallback`;
+        }
+
+        return {
+            seedText,
+            seed: hashStringToSeed(seedText),
+            label: hashStringToSeed(seedText).toString(16).toUpperCase().slice(0, 6)
+        };
+    }
+
+    function shuffleArray(array, rng = Math.random) {
+        const copied = [...array];
+        for (let i = copied.length - 1; i > 0; i--) {
+            const j = Math.floor(rng() * (i + 1));
+            [copied[i], copied[j]] = [copied[j], copied[i]];
+        }
+        return copied;
+    }
+
+    function getTypeCounts(questionSet, types = getActiveTypes()) {
+        const typeCounts = createScoreObject(types, 0);
+        questionSet.forEach(q => {
+            if (typeCounts[q.type] !== undefined) typeCounts[q.type]++;
+        });
+        return typeCounts;
+    }
+
+    function applyTypeWeights(questionSet, types = getActiveTypes()) {
+        const typeCounts = getTypeCounts(questionSet, types);
+        const targetPerType = questionSet.length / types.length;
+
+        return questionSet.map(q => {
+            const countForType = typeCounts[q.type] || 1;
+            const weight = targetPerType / countForType;
+            return { ...q, weight };
+        });
+    }
+
+    function getPoolByType(type) {
+        return MAIN_TYPES.includes(type) ? questionPool : advanceQuestionPool;
+    }
+
+    function buildAdvancedQuestionSet(course) {
+        const seedInfo = getStableCourseSeed(course);
+        const rng = seededRandom(seedInfo.seed);
+        const perType = Math.floor(course.count / 8);
+        const types = ALL_TYPES;
+        let selected = [];
+
+        types.forEach(type => {
+            const pool = getPoolByType(type).filter(q => q.type === type);
+            selected = selected.concat(shuffleArray(pool, rng).slice(0, perType));
+        });
+
+        selected = applyTypeWeights(shuffleArray(selected, rng), types);
+        currentQuestionSetMeta = {
+            method: course.selectionLabel,
+            seedLabel: seedInfo.label,
+            typeCounts: getTypeCounts(selected, types)
+        };
+        return selected;
+    }
+
+    function buildBalancedQuestionSet(course) {
+        const count = course.count;
+        const seedInfo = getStableCourseSeed(course);
+        const rng = seededRandom(seedInfo.seed);
+        const types = MAIN_TYPES;
+        const shuffledTypes = shuffleArray(types, rng);
+        const quotas = { A: Math.floor(count / 4), B: Math.floor(count / 4), C: Math.floor(count / 4), D: Math.floor(count / 4) };
+
+        for (let i = 0; i < count % 4; i++) {
+            quotas[shuffledTypes[i]]++;
+        }
+
+        const buckets = { A: [], B: [], C: [], D: [] };
+        questionPool.forEach(q => {
+            if (buckets[q.type]) buckets[q.type].push(q);
+        });
+
+        types.forEach(type => {
+            buckets[type] = shuffleArray(buckets[type], rng);
+        });
+
+        let selected = [];
+        types.forEach(type => {
+            selected = selected.concat(buckets[type].slice(0, quotas[type]));
+        });
+
+        selected = shuffleArray(selected, rng);
+        selected = applyTypeWeights(selected, types);
+
+        currentQuestionSetMeta = {
+            method: course.selectionLabel,
+            seedLabel: seedInfo.label,
+            typeCounts: getTypeCounts(selected, types)
+        };
+
+        return selected;
+    }
+
+    function buildQuestionSet(course) {
+        if (course.isAdvance) {
+            return buildAdvancedQuestionSet(course);
+        }
+
+        if (course.selection === 'all-balanced' || course.count >= questionPool.length) {
+            const seedInfo = getStableCourseSeed(course);
+            const rng = seededRandom(seedInfo.seed);
+            const selected = applyTypeWeights(shuffleArray(questionPool, rng), MAIN_TYPES);
+
+            currentQuestionSetMeta = {
+                method: course.selectionLabel,
+                seedLabel: seedInfo.label,
+                typeCounts: getTypeCounts(selected, MAIN_TYPES)
+            };
+
+            return selected;
+        }
+
+        if (course.selection === 'all-weighted') {
+            const seedInfo = getStableCourseSeed(course);
+            const rng = seededRandom(seedInfo.seed);
+            const baseQuestions = questionPool.slice(0, course.count);
+            const selected = applyTypeWeights(shuffleArray(baseQuestions, rng), MAIN_TYPES);
+
+            currentQuestionSetMeta = {
+                method: course.selectionLabel,
+                seedLabel: seedInfo.label,
+                typeCounts: getTypeCounts(selected, MAIN_TYPES)
+            };
+
+            return selected;
+        }
+
+        return buildBalancedQuestionSet(course);
+    }
+
+    function calculateMaxPossibleScores(questionSet) {
+        const types = getActiveTypes();
+        const weightedTypeTotals = createScoreObject(types, 0);
+
+        questionSet.forEach(q => {
+            if (weightedTypeTotals[q.type] !== undefined) {
+                weightedTypeTotals[q.type] += q.weight || 1;
+            }
+        });
+
+        const result = createScoreObject(types, 0);
+        types.forEach(type => {
+            const oppType = opposition[type];
+            result[type] = ((weightedTypeTotals[type] || 0) + (weightedTypeTotals[oppType] || 0)) * 2;
+        });
+        return result;
+    }
+
+    function formatScore(value) {
+        return Math.abs(value - Math.round(value)) < 0.001 ? String(Math.round(value)) : value.toFixed(1);
+    }
+
+    function getQuestionSetText() {
+        const c = currentQuestionSetMeta.typeCounts || createScoreObject(getActiveTypes(), 0);
+        const activeTypes = getActiveTypes();
+        const values = activeTypes.map(t => Number(c[t] || 0));
+        const allSame = values.length > 0 && values.every(v => v === values[0]);
+        const typeText = allSame ? `ALL:${values[0]}` : activeTypes.map(t => `${t}:${c[t] || 0}`).join(' ');
+        return `${currentQuestionSetMeta.method} / ${typeText}`;
+    }
+
+    function getNormalizedScores(types = getActiveTypes()) {
+        const normalized = createScoreObject(types, 0);
+
+        types.forEach(type => {
+            const max = maxPossibleScore[type] || 1;
+            normalized[type] = (scores[type] / max) * 100;
+        });
+
+        return normalized;
+    }
+
+    function getCompositionScores(normalized, types = Object.keys(normalized || getNormalizedScores())) {
+        const source = normalized || getNormalizedScores(types);
+        const total = types.reduce((sum, type) => sum + Math.max(0, Number(source[type] || 0)), 0);
+
+        if (total <= 0) {
+            return createScoreObject(types, 0);
+        }
+
+        const result = createScoreObject(types, 0);
+        types.forEach(type => {
+            result[type] = (Math.max(0, Number(source[type] || 0)) / total) * 100;
+        });
+        return result;
+    }
+
+    function getEvaluationScores() {
+        const normalized = getNormalizedScores(MAIN_TYPES);
+
+        if (currentCourse.evaluation === 'rounded-normalized') {
+            return {
+                A: Math.round(normalized.A / 5) * 5,
+                B: Math.round(normalized.B / 5) * 5,
+                C: Math.round(normalized.C / 5) * 5,
+                D: Math.round(normalized.D / 5) * 5
+            };
+        }
+
+        if (currentCourse.evaluation === 'normalized') {
+            return normalized;
+        }
+
+        return {
+            A: normalized.A * 0.65 + Math.max(0, normalized.A - normalized.B) * 0.35,
+            B: normalized.B * 0.65 + Math.max(0, normalized.B - normalized.A) * 0.35,
+            C: normalized.C * 0.65 + Math.max(0, normalized.C - normalized.D) * 0.35,
+            D: normalized.D * 0.65 + Math.max(0, normalized.D - normalized.C) * 0.35
+        };
+    }
+
+    function getAdvanceAxisResultKey() {
+        if (!currentCourse || !currentCourse.isAdvance) return null;
+        const normalized = getNormalizedScores(ADVANCE_TYPES);
+        const stats = getAnswerStats();
+        const values = ADVANCE_TYPES.map(t => normalized[t]);
+        const avg = mean(values);
+        const sd = standardDeviation(values);
+        if (stats.neutralRate >= 0.72 || sd < 5.0 && avg < 28) return 'N';
+
+        const sorted = [...ADVANCE_TYPES].sort((a, b) => normalized[b] - normalized[a]);
+        const top = sorted[0], second = sorted[1], third = sorted[2];
+        const topScore = normalized[top], secondScore = normalized[second], thirdScore = normalized[third];
+        const oppositeScore = normalized[opposition[top]] || 0;
+
+        if (topScore >= 72 && oppositeScore <= 12 && (topScore - secondScore) >= 18) {
+            const key = `${top}++`;
+            if (advanceResultsData[key]) return key;
+        }
+
+        const pairKey = [top, second].sort().join('');
+        if (advanceResultsData[pairKey] && topScore >= 42 && secondScore >= 42 && (topScore - secondScore) <= 8 && (secondScore - thirdScore) >= 6) {
+            return pairKey;
+        }
+
+        if (topScore - secondScore <= 6 && topScore >= 35 && secondScore >= 35) {
+            const maybePair = [top, second].sort().join('');
+            if (advanceResultsData[maybePair]) return maybePair;
+        }
+
+        return topScore >= 58 && advanceResultsData[`${top}++`] ? `${top}++` : top;
+    }
+
+    function standardDeviation(values) {
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const variance = values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / values.length;
+        return Math.sqrt(variance);
+    }
+
+    function getAnswerStats() {
+        const total = answerHistory.length || 1;
+        const neutralCount = answerHistory.filter(a => a.answerValue === 0).length;
+        const strongCount = answerHistory.filter(a => Math.abs(a.answerValue) === 2).length;
+        const weakCount = answerHistory.filter(a => Math.abs(a.answerValue) === 1).length;
+
+        return {
+            total,
+            neutralCount,
+            strongCount,
+            weakCount,
+            neutralRate: neutralCount / total,
+            strongRate: strongCount / total,
+            activeRate: (strongCount + weakCount) / total
+        };
+    }
+
+    function mean(values) {
+        return values.reduce((a, b) => a + b, 0) / values.length;
+    }
+
+    function getSpecialResultKey() {
+        // Light Precision以上の精密コースだけで発動。STANDARDでは既存判定のみを使う。
+        if (!currentCourse || currentCourse.count < 48) return null;
+
+        const normalized = getNormalizedScores();
+        const types = [...MAIN_TYPES];
+        const values = types.map(t => normalized[t]);
+        const avg = mean(values);
+        const sd = standardDeviation(values);
+        const stats = getAnswerStats();
+
+        // 1) 中立連打・判定保留
+        if (stats.neutralRate >= 0.72 || (stats.neutralRate >= 0.62 && stats.activeRate <= 0.38)) {
+            return '∅';
+        }
+
+        // 2) 高均衡 / 低均衡
+        if (sd <= 4.2 && avg >= 42 && stats.neutralRate <= 0.35) {
+            return 'N+';
+        }
+
+        if (sd <= 5.0 && (avg <= 28 || stats.neutralRate >= 0.48)) {
+            return 'N-';
+        }
+
+        const sorted = [...types].sort((a, b) => {
+            const diff = normalized[b] - normalized[a];
+            if (Math.abs(diff) > 0.0001) return diff;
+            return scores[b] - scores[a];
+        });
+
+        const top = sorted[0];
+        const second = sorted[1];
+        const third = sorted[2];
+        const bottom = sorted[3];
+        const oppositeMap = opposition;
+        const topScore = normalized[top];
+        const secondScore = normalized[second];
+        const thirdScore = normalized[third];
+        const bottomScore = normalized[bottom];
+        const oppositeScore = normalized[oppositeMap[top]];
+
+        // 3) 既存 + のさらに上。対立思想がほぼ沈黙している場合のみ。
+        if (topScore >= 72 && oppositeScore <= 12 && (topScore - secondScore) >= 18) {
+            const key = `${top}++`;
+            if (resultsData[key]) return key;
+        }
+
+        // 4) 1思想だけ極端に低い欠落型。
+        const otherTypes = sorted.slice(0, 3);
+        const otherAvg = mean(otherTypes.map(t => normalized[t]));
+        if (bottomScore <= 15 && otherAvg >= 34 && (thirdScore - bottomScore) >= 12) {
+            const key = `!${bottom}`;
+            if (resultsData[key]) return key;
+        }
+
+        // 5) 2思想が高く、近く、3位以下を離している場合の精密複合 #。
+        const pairKey = [top, second].sort().join('') + '#';
+        if (resultsData[pairKey] && topScore >= 42 && secondScore >= 42 && (topScore - secondScore) <= 6 && (secondScore - thirdScore) >= 7) {
+            return pairKey;
+        }
+
+        return null;
+    }
+
+    function decideResultKey() {
+        const specialResultKey = getSpecialResultKey();
+        if (specialResultKey) return specialResultKey;
+
+        const evaluationScores = getEvaluationScores();
+        const sorted = Object.keys(evaluationScores).sort((a, b) => {
+            const diff = evaluationScores[b] - evaluationScores[a];
+            if (diff !== 0) return diff;
+            return scores[b] - scores[a]; // Raw score tie-breaker
+        });
+
+        const values = Object.values(evaluationScores);
+        const sd = standardDeviation(values);
+
+        if (sd < currentCourse.neutralSD) {
+            return 'NEUTRAL';
+        }
+
+        const s1 = evaluationScores[sorted[0]];
+        const s2 = evaluationScores[sorted[1]];
+        const s3 = evaluationScores[sorted[2]];
+
+        if ((s1 - s3) <= currentCourse.triDiff) {
+            const triKey = [sorted[0], sorted[1], sorted[2]].sort().join('');
+            if (resultsData[triKey]) return triKey;
+        }
+
+        if ((s1 - s2) <= currentCourse.hybridDiff) {
+            const biKey = [sorted[0], sorted[1]].sort().join('');
+            if (resultsData[biKey]) return biKey;
+        }
+
+        const winnerType = sorted[0];
+        const maxScore = maxPossibleScore[winnerType] || 1;
+        const intensityRatio = scores[winnerType] / maxScore;
+
+        return winnerType + (intensityRatio >= currentCourse.plusLine ? '+' : '-');
+    }
+
+    function getCourseDebugText() {
+        const normalized = getNormalizedScores(getActiveTypes());
+        const typeText = getActiveTypes().map(t => `${t}:${normalized[t].toFixed(1)}`).join(' ');
+        return `${currentCourse.shareName} / ${getQuestionSetText()} / 評価:${currentCourse.evaluation} / 補正 ${typeText}`;
+    }
+
+    function startQuiz(count, fromScreen = introScreen) {
+        currentCourse = quizModes[count] || quizModes[24];
+        currentQIndex = 0;
+        answerHistory = [];
+        scores = createScoreObject(ALL_TYPES, 0);
+
+        activeQuestions = buildQuestionSet(currentCourse);
+        maxPossibleScore = calculateMaxPossibleScores(activeQuestions);
+
+        document.getElementById('total-q').innerText = activeQuestions.length;
+        switchScreen(fromScreen, quizScreen);
+        renderQuestion();
+    }
+
+    function renderQuestion() {
+        const q = activeQuestions[currentQIndex];
+        const qText = document.getElementById('question-text');
+        
+        gsap.fromTo(qText, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.4 });
+
+        qText.innerText = q.t;
+        document.getElementById('section-title').innerText = `TOPIC: ${q.s}`;
+        document.getElementById('current-q').innerText = currentQIndex + 1;
+        
+        const progress = ((currentQIndex) / activeQuestions.length) * 100;
+        document.getElementById('progress-fill').style.width = `${progress}%`;
+    }
+
+    function handleAnswer(value) {
+        if (currentQIndex >= activeQuestions.length) return;
+
+        const q = activeQuestions[currentQIndex];
+        
+        // NEW LOGIC:
+        // Value 2 (Strongly Agree) -> +2 to q.type
+        // Value 1 (Agree) -> +1 to q.type
+        // Value 0 (Neutral) -> 0
+        // Value -1 (Disagree) -> +1 to opposition[q.type]
+        // Value -2 (Strongly Disagree) -> +2 to opposition[q.type]
+
+        const weight = q.weight || 1;
+
+        if (value > 0) {
+            scores[q.type] += value * weight;
+        } else if (value < 0) {
+            const oppType = opposition[q.type];
+            scores[oppType] += Math.abs(value) * weight;
+        }
+
+        answerHistory.push({
+            question: q.t,
+            topic: q.s,
+            type: q.type,
+            weight,
+            answerValue: value
+        });
+
+        currentQIndex++;
+        if (currentQIndex < activeQuestions.length) {
+            renderQuestion();
+        } else {
+            showResult();
+        }
+    }
+
+    function getReadableResultColor(color) {
+        const raw = String(color || '').trim();
+        const fallback = currentTheme === 'light' ? '#1f2937' : '#ffffff';
+        if (currentTheme !== 'light') return raw || fallback;
+
+        const named = {
+            white: '#ffffff',
+            '#fff': '#ffffff',
+            '#ffffff': '#ffffff',
+            '#cfd8dc': '#cfd8dc'
+        };
+        const normalizedName = raw.toLowerCase();
+        const hex = named[normalizedName] || raw;
+
+        const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+        if (!m) return raw || fallback;
+
+        const n = m[1];
+        const r = parseInt(n.slice(0, 2), 16);
+        const g = parseInt(n.slice(2, 4), 16);
+        const b = parseInt(n.slice(4, 6), 16);
+        const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+        // In light mode, white / pale result colors such as N, N+, N- disappear.
+        // Darken only those high-luminance colors; vivid A/B/C/D colors stay unchanged.
+        if (luminance >= 0.72) return '#1f2937';
+        return raw || fallback;
+    }
+
+
+    const PUBLIC_STATS_COURSE_ORDER = [
+        'normal_standard', 'normal_light', 'normal_medium', 'normal_heavy', 'normal_max',
+        'advance_standard', 'advance_light', 'advance_medium', 'advance_heavy', 'advance_max'
+    ];
+    const PUBLIC_STATS_COURSE_META = {
+        normal_standard: { mode: 'normal', label: 'Standard', questions: 24, allPerAxis: 6 },
+        normal_light: { mode: 'normal', label: 'Light Precision', questions: 48, allPerAxis: 12 },
+        normal_medium: { mode: 'normal', label: 'Medium Precision', questions: 72, allPerAxis: 18 },
+        normal_heavy: { mode: 'normal', label: 'Heavy Precision', questions: 100, allPerAxis: 25 },
+        normal_max: { mode: 'normal', label: 'Max Precision', questions: 200, allPerAxis: 50 },
+        advance_standard: { mode: 'advance', label: 'Advance Standard', questions: 40, allPerAxis: 5 },
+        advance_light: { mode: 'advance', label: 'Advance Light Precision', questions: 96, allPerAxis: 12 },
+        advance_medium: { mode: 'advance', label: 'Advance Medium Precision', questions: 144, allPerAxis: 18 },
+        advance_heavy: { mode: 'advance', label: 'Advance Heavy Precision', questions: 200, allPerAxis: 25 },
+        advance_max: { mode: 'advance', label: 'Advance Max Precision', questions: 400, allPerAxis: 50 }
+    };
+    const MAIN_PUBLIC_RESULT_CODES = [
+        'A++','A+','A-','B++','B+','B-','C++','C+','C-','D++','D+','D-',
+        '!A','!B','!C','!D','AB','AC','AD','BC','BD','CD','AB#','AC#','AD#','BC#','BD#','CD#',
+        'ABC','ABD','ACD','BCD','N','N+','N-','∅'
+    ];
+    const ADVANCE_PUBLIC_RESULT_CODES = ['E','F','G','H','E++','F++','G++','H++','EG','EH','FG','FH','EF','GH','N'];
+
+    function getPublicCourseId() {
+        const map = {
+            STANDARD: 'normal_standard',
+            LIGHT: 'normal_light',
+            MEDIUM: 'normal_medium',
+            HEAVY: 'normal_heavy',
+            MAX: 'normal_max',
+            ADV_STANDARD: 'advance_standard',
+            ADV_LIGHT: 'advance_light',
+            ADV_MEDIUM: 'advance_medium',
+            ADV_HEAVY: 'advance_heavy',
+            ADV_MAX: 'advance_max'
+        };
+        return map[currentCourse.id] || null;
+    }
+
+    function getDisplayResultCode(key) {
+        return key === 'NEUTRAL' ? 'N' : (key || 'N');
+    }
+
+    async function submitCurrentPublicStats(resultKey, advanceKey) {
+        const fb = window.mtpsFirebase;
+        if (!fb || typeof fb.submitPublicStats !== 'function') {
+            console.warn('Firebase public stats is not ready.');
+            return;
+        }
+        const courseId = getPublicCourseId();
+        if (!courseId) {
+            console.warn('Unknown public stats course:', currentCourse.id);
+            return;
+        }
+        const payload = {
+            courseId,
+            mode: currentCourse.isAdvance ? 'advance' : 'normal',
+            mainResult: getDisplayResultCode(resultKey)
+        };
+        if (currentCourse.isAdvance) {
+            payload.advanceResult = advanceKey || 'N';
+        }
+        try {
+            await fb.submitPublicStats(payload);
+            console.info('Public stats submitted:', payload);
+        } catch (error) {
+            console.warn('Public stats submit failed:', error);
+        }
+    }
+
+    function encodeStatsKeyLocal(code) {
+        const fb = window.mtpsFirebase;
+        if (fb && typeof fb.encodeStatKey === 'function') return fb.encodeStatKey(code);
+        return String(code || 'N').replace(/∅/g, 'EMPTY').replace(/!/g, 'NOT_').replace(/\+/g, '_PLUS').replace(/#/g, '_SHARP').replace(/\//g, '__').replace(/[^A-Za-z0-9_]/g, '_');
+    }
+
+    function decodeStatsKeyLocal(key) {
+        const fb = window.mtpsFirebase;
+        if (fb && typeof fb.decodeStatKey === 'function') return fb.decodeStatKey(key);
+        return String(key || 'N').replace(/__/g, '/').replace(/_SHARP/g, '#').replace(/_PLUS/g, '+').replace(/^NOT_/, '!').replace(/EMPTY/g, '∅');
+    }
+
+    function readStatsCount(map, code) {
+        if (!map) return 0;
+        const safe = encodeStatsKeyLocal(code);
+        return Number(map[safe] || map[code] || 0);
+    }
+
+    function renderStatsChips(map, total, codes) {
+        return codes.map(code => {
+            const count = readStatsCount(map, code);
+            const percent = total > 0 ? (count / total * 100) : 0;
+            return `<div class="stats-chip"><strong>${escapeHtml(code)}: ${count}</strong><span>${percent.toFixed(1)}%</span></div>`;
+        }).join('');
+    }
+
+    function renderComboStats(map, total) {
+        if (!map || Object.keys(map).length === 0) return '<div class="stats-empty" style="padding:1rem;">組み合わせ統計はまだありません。</div>';
+        const entries = Object.entries(map)
+            .map(([key, value]) => ({ code: decodeStatsKeyLocal(key), count: Number(value || 0) }))
+            .filter(item => item.count > 0)
+            .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code, 'ja'))
+            .slice(0, 30);
+        if (entries.length === 0) return '<div class="stats-empty" style="padding:1rem;">組み合わせ統計はまだありません。</div>';
+        return entries.map(item => {
+            const percent = total > 0 ? (item.count / total * 100) : 0;
+            return `<div class="stats-chip"><strong>${escapeHtml(item.code)}: ${item.count}</strong><span>${percent.toFixed(1)}%</span></div>`;
+        }).join('');
+    }
+
+    async function renderPublicStats() {
+        const container = document.getElementById('public-stats-list');
+        if (!container) return;
+        const fb = window.mtpsFirebase;
+        if (!fb || typeof fb.loadPublicStats !== 'function') {
+            container.innerHTML = '<div class="stats-error">Firebaseがまだ初期化されていません。数秒後にもう一度REFRESHしてください。</div>';
+            return;
+        }
+        container.innerHTML = '<div class="stats-loading">公開統計を読み込み中...</div>';
+        try {
+            const stats = await fb.loadPublicStats();
+            const hasAny = stats && Object.keys(stats).length > 0;
+            if (!hasAny) {
+                container.innerHTML = '<div class="stats-empty">まだ公開統計がありません。診断完了後に自動でコース別集計へ反映されます。</div>';
+                return;
+            }
+            container.innerHTML = PUBLIC_STATS_COURSE_ORDER.map(courseId => {
+                const meta = PUBLIC_STATS_COURSE_META[courseId];
+                const doc = stats[courseId] || {};
+                const total = Number(doc.total || 0);
+                const isAdvance = meta.mode === 'advance';
+                return `
+                    <div class="stats-course-card" style="border-left-color:${isAdvance ? 'var(--color-e)' : 'var(--color-accent)'};">
+                        <div class="stats-course-head">
+                            <div>
+                                <div class="stats-course-title">${escapeHtml(meta.label)}</div>
+                                <div style="color:var(--color-dim); font-size:0.82rem; font-family:var(--font-mono);">${meta.questions}問 / ALL:${meta.allPerAxis} / ${escapeHtml(courseId)}</div>
+                            </div>
+                            <div class="stats-total">TOTAL: ${total}</div>
+                        </div>
+                        <div class="stats-section-title">Main Results</div>
+                        <div class="stats-grid">${renderStatsChips(doc.mainResults || {}, total, MAIN_PUBLIC_RESULT_CODES)}</div>
+                        ${isAdvance ? `
+                            <div class="stats-section-title">Advance Axis Results</div>
+                            <div class="stats-grid">${renderStatsChips(doc.advanceResults || {}, total, ADVANCE_PUBLIC_RESULT_CODES)}</div>
+                            <div class="stats-section-title">Main / Adv Combination Top</div>
+                            <div class="stats-grid">${renderComboStats(doc.comboResults || {}, total)}</div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.warn('Public stats load failed:', error);
+            container.innerHTML = `<div class="stats-error">公開統計の読み込みに失敗しました。<br>${escapeHtml(error.message || error)}</div>`;
+        }
+    }
+
+    const HISTORY_STORAGE_KEY = 'mtps-result-history-v1';
+    const HISTORY_LIMIT = 50;
+
+    function loadHistory() {
+        try {
+            const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveHistoryEntry(resultKey, data, normalized, composition, advanceKey = null, advanceData = null, allNormalized = null) {
+        const stats = getAnswerStats();
+        const displayKey = resultKey === 'NEUTRAL' ? 'N' : resultKey;
+        const entry = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            savedAt: new Date().toISOString(),
+            resultKey: displayKey,
+            resultTitle: data.title,
+            resultColor: data.color,
+            course: currentCourse.shareName,
+            courseId: currentCourse.id,
+            questionCount: activeQuestions.length,
+            questionSet: getQuestionSetText(),
+            advanceKey: advanceKey,
+            advanceTitle: advanceData ? advanceData.title : null,
+            scores: {
+                A: Number(scores.A.toFixed(3)),
+                B: Number(scores.B.toFixed(3)),
+                C: Number(scores.C.toFixed(3)),
+                D: Number(scores.D.toFixed(3))
+            },
+            normalized: {
+                A: Number(normalized.A.toFixed(1)),
+                B: Number(normalized.B.toFixed(1)),
+                C: Number(normalized.C.toFixed(1)),
+                D: Number(normalized.D.toFixed(1))
+            },
+            composition: {
+                A: Number((composition?.A || 0).toFixed(1)),
+                B: Number((composition?.B || 0).toFixed(1)),
+                C: Number((composition?.C || 0).toFixed(1)),
+                D: Number((composition?.D || 0).toFixed(1))
+            },
+            answerStats: {
+                total: stats.total,
+                neutralRate: Number((stats.neutralRate * 100).toFixed(1)),
+                strongRate: Number((stats.strongRate * 100).toFixed(1)),
+                activeRate: Number((stats.activeRate * 100).toFixed(1))
+            }
+        };
+
+        const history = loadHistory();
+        history.unshift(entry);
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, HISTORY_LIMIT)));
+    }
+
+    function formatHistoryDate(isoString) {
+        const date = new Date(isoString);
+        if (Number.isNaN(date.getTime())) return '日時不明';
+        return date.toLocaleString('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderHistory() {
+        const container = document.getElementById('history-list');
+        if (!container) return;
+
+        const history = loadHistory();
+        if (history.length === 0) {
+            container.innerHTML = '<div class="history-empty">まだ履歴がありません。<br>診断を完了すると、ここに自動で保存されます。</div>';
+            return;
+        }
+
+        container.innerHTML = history.map(entry => {
+            const resultColor = getReadableResultColor(entry.resultColor || '#ffffff');
+            const safeTitle = escapeHtml(entry.resultTitle || '診断結果');
+            const safeCourse = escapeHtml(entry.course || 'UNKNOWN COURSE');
+            const safeQuestionSet = escapeHtml(entry.questionSet || '問題構成不明');
+            const n = entry.normalized || { A: 0, B: 0, C: 0, D: 0 };
+            const comp = entry.composition || getCompositionScores(n);
+            const raw = entry.scores || { A: 0, B: 0, C: 0, D: 0 };
+            const stats = entry.answerStats || {};
+
+            return `
+                <div class="history-card" style="border-left-color:${resultColor};">
+                    <div class="history-card-top">
+                        <div>
+                            <div class="history-result-code" style="color:${resultColor};">${escapeHtml(entry.resultKey || 'N')}</div>
+                            <div class="history-result-title" style="color:${resultColor};">${safeTitle}</div>
+                        </div>
+                        <div class="history-date">${formatHistoryDate(entry.savedAt)}<br>${escapeHtml(entry.courseId || '')}</div>
+                    </div>
+                    <div class="history-course">${safeCourse}<br>${safeQuestionSet}${entry.advanceKey ? `<br>Advance Axis: ${escapeHtml(entry.advanceKey)} ${escapeHtml(entry.advanceTitle || '')}` : ''}</div>
+                    <div class="history-score-grid">
+                        <div class="history-score-item" style="border-top:2px solid var(--color-a);">A<strong>${Number(comp.A || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.A || 0).toFixed(1)}%</span></div>
+                        <div class="history-score-item" style="border-top:2px solid var(--color-b);">B<strong>${Number(comp.B || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.B || 0).toFixed(1)}%</span></div>
+                        <div class="history-score-item" style="border-top:2px solid var(--color-c);">C<strong>${Number(comp.C || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.C || 0).toFixed(1)}%</span></div>
+                        <div class="history-score-item" style="border-top:2px solid var(--color-d);">D<strong>${Number(comp.D || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.D || 0).toFixed(1)}%</span></div>
+                    </div>
+                    <div style="margin-top:0.75rem; color:var(--color-dim); font-size:0.78rem; font-family:var(--font-mono); line-height:1.6;">
+                        Neutral ${Number(stats.neutralRate || 0).toFixed(1)}% / Strong ${Number(stats.strongRate || 0).toFixed(1)}% / Active ${Number(stats.activeRate || 0).toFixed(1)}%
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function clearHistory() {
+        const ok = window.confirm('保存された診断履歴をすべて削除しますか？');
+        if (!ok) return;
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
+        renderHistory();
+    }
+
+    function colorVarForType(type) {
+        return `var(--color-${String(type).toLowerCase()})`;
+    }
+
+    function renderMiniPie(elementId, composition, types, codeLabel) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        let start = 0;
+        const stops = types.map(type => {
+            const value = composition[type] || 0;
+            const seg = `${colorVarForType(type)} ${start}% ${start + value}%`;
+            start += value;
+            return seg;
+        });
+        el.style.background = `conic-gradient(from 0deg, ${stops.join(', ')})`;
+        el.setAttribute('data-code', codeLabel || types.join(''));
+    }
+
+    function renderAxisLegend(elementId, types, composition, normalized) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.innerHTML = types.map(type => `
+            <div class="advance-legend-row">
+                <span class="advance-dot" style="background:${colorVarForType(type)}"></span>
+                <span>${TYPE_LABELS[type]} (${type}): 構成 ${Number(composition[type] || 0).toFixed(1)}% / 濃度 ${Number(normalized[type] || 0).toFixed(1)}%</span>
+            </div>
+        `).join('');
+    }
+
+    function renderRadarChart(normalizedAll) {
+        const svg = document.getElementById('radar-chart');
+        if (!svg) return;
+        const types = ALL_TYPES;
+        const cx = 130, cy = 130, maxR = 88;
+        const labelR = 110;
+        const pointsFor = (scale) => types.map((type, i) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const r = maxR * scale;
+            return `${cx + Math.cos(angle) * r},${cy + Math.sin(angle) * r}`;
+        }).join(' ');
+        const dataPoints = types.map((type, i) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const r = maxR * Math.max(0, Math.min(100, normalizedAll[type] || 0)) / 100;
+            return `${cx + Math.cos(angle) * r},${cy + Math.sin(angle) * r}`;
+        }).join(' ');
+        const axes = types.map((type, i) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const x = cx + Math.cos(angle) * maxR;
+            const y = cy + Math.sin(angle) * maxR;
+            const lx = cx + Math.cos(angle) * labelR;
+            const ly = cy + Math.sin(angle) * labelR;
+            return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(148,163,184,0.45)" stroke-width="1" />
+                    <text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="currentColor" font-size="12" font-family="var(--font-mono)">${type}</text>`;
+        }).join('');
+        svg.innerHTML = `
+            <g style="color:var(--color-text)">
+                <polygon points="${pointsFor(1)}" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="1" />
+                <polygon points="${pointsFor(0.75)}" fill="none" stroke="rgba(148,163,184,0.25)" stroke-width="1" />
+                <polygon points="${pointsFor(0.5)}" fill="none" stroke="rgba(148,163,184,0.20)" stroke-width="1" />
+                <polygon points="${pointsFor(0.25)}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="1" />
+                ${axes}
+                <polygon points="${dataPoints}" fill="rgba(100,255,218,0.22)" stroke="var(--color-accent)" stroke-width="2" />
+                ${types.map((type, i) => {
+                    const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+                    const r = maxR * Math.max(0, Math.min(100, normalizedAll[type] || 0)) / 100;
+                    const x = cx + Math.cos(angle) * r;
+                    const y = cy + Math.sin(angle) * r;
+                    return `<circle cx="${x}" cy="${y}" r="3" fill="${colorVarForType(type)}" />`;
+                }).join('')}
+            </g>`;
+    }
+
+    function renderAdvanceResult(mainResultKey, advanceKey, allNormalized) {
+        const visuals = document.getElementById('advance-visuals');
+        const box = document.getElementById('advance-result-box');
+        if (!currentCourse.isAdvance) {
+            if (visuals) visuals.classList.remove('active');
+            if (box) box.style.display = 'none';
+            return;
+        }
+        if (visuals) visuals.classList.add('active');
+        const mainNorm = getNormalizedScores(MAIN_TYPES);
+        const advNorm = getNormalizedScores(ADVANCE_TYPES);
+        const mainComp = getCompositionScores(mainNorm, MAIN_TYPES);
+        const advComp = getCompositionScores(advNorm, ADVANCE_TYPES);
+        const advData = advanceResultsData[advanceKey] || advanceResultsData.N;
+        renderMiniPie('main-mini-pie', mainComp, MAIN_TYPES, mainResultKey === 'NEUTRAL' ? 'N' : mainResultKey);
+        renderMiniPie('advance-mini-pie', advComp, ADVANCE_TYPES, advanceKey || 'N');
+        renderAxisLegend('main-mini-legend', MAIN_TYPES, mainComp, mainNorm);
+        renderAxisLegend('advance-mini-legend', ADVANCE_TYPES, advComp, advNorm);
+        renderRadarChart(allNormalized || getNormalizedScores(ALL_TYPES));
+        if (box) {
+            box.style.display = 'block';
+            box.innerHTML = `
+                <div class="advance-result-code">ADVANCE AXIS: ${escapeHtml(advanceKey || 'N')}</div>
+                <strong>${escapeHtml(advData.title)}</strong><br>
+                <span style="color:var(--color-dim); font-style:italic;">${advData.quote}</span><br>
+                <span>${advData.desc}</span>
+            `;
+        }
+    }
+
+    function showResult() {
+        document.getElementById('progress-fill').style.width = '100%';
+
+        // Result intensity is each axis' normalized reaction rate.
+        // The pie chart uses composition, so A+B+C+D is always 100% visually.
+        const normalized = getNormalizedScores(MAIN_TYPES);
+        const composition = getCompositionScores(normalized, MAIN_TYPES);
+        const allNormalized = getNormalizedScores(getActiveTypes());
+
+        const pA = composition.A;
+        const pB = composition.B;
+        const pC = composition.C;
+        const pD = composition.D;
+
+        const resultKey = decideResultKey();
+        const advanceKey = getAdvanceAxisResultKey();
+        const data = resultsData[resultKey] || resultsData.NEUTRAL;
+        const advanceData = advanceKey ? (advanceResultsData[advanceKey] || advanceResultsData.N) : null;
+
+        // Render Result
+        resultScreen.classList.toggle('advance-result-mode', !!currentCourse.isAdvance);
+        switchScreen(quizScreen, resultScreen);
+
+        // Chart Animation
+        const chartObj = { a: 0, b: 0, c: 0, d: 0 };
+        gsap.to(chartObj, {
+            a: pA, b: pB, c: pC, d: pD,
+            duration: 1.5,
+            ease: "power2.out",
+            onUpdate: () => {
+                const stops = [
+                    `var(--color-a) 0% ${chartObj.a}%`,
+                    `var(--color-b) ${chartObj.a}% ${chartObj.a + chartObj.b}%`,
+                    `var(--color-c) ${chartObj.a + chartObj.b}% ${chartObj.a + chartObj.b + chartObj.c}%`,
+                    `var(--color-d) ${chartObj.a + chartObj.b + chartObj.c}% 100%`
+                ];
+                document.getElementById('pie-chart').style.background = `conic-gradient(from 0deg, ${stops.join(', ')})`;
+            }
+        });
+
+        saveHistoryEntry(resultKey, data, normalized, composition, advanceKey, advanceData, allNormalized);
+        submitCurrentPublicStats(resultKey, advanceKey);
+
+        // Update Legend with composition ratios and intensity rates.
+        document.getElementById('result-legend').innerHTML = `
+            <div class="legend-note">円グラフ: 構成比 / 濃度: 各思想の最大値に対する反応率</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div><span>回帰淘汰 (A)<br>構成 ${composition.A.toFixed(1)}% / 濃度 ${normalized.A.toFixed(1)}%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div><span>共命包摂 (B)<br>構成 ${composition.B.toFixed(1)}% / 濃度 ${normalized.B.toFixed(1)}%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div><span>適応進転 (C)<br>構成 ${composition.C.toFixed(1)}% / 濃度 ${normalized.C.toFixed(1)}%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div><span>無差総質 (D)<br>構成 ${composition.D.toFixed(1)}% / 濃度 ${normalized.D.toFixed(1)}%</span></div>
+        `;
+
+        // DOM Updates
+        document.getElementById('result-course').innerText = `COURSE: ${currentCourse.shareName} / ${getQuestionSetText()}`;
+        const readableResultColor = getReadableResultColor(data.color);
+        const resultCodeEl = document.getElementById('result-code');
+        resultCodeEl.innerText = currentCourse.isAdvance && advanceKey ? `${resultKey === 'NEUTRAL' ? 'N' : resultKey}/${advanceKey}` : (resultKey === 'NEUTRAL' ? 'N' : resultKey);
+        resultCodeEl.style.color = readableResultColor;
+
+        const rTitle = document.getElementById('result-title');
+        const rQuote = document.getElementById('result-quote');
+        const rDesc = document.getElementById('result-desc');
+        const rCard = document.getElementById('result-card');
+
+        rTitle.innerText = data.title;
+        rTitle.style.color = readableResultColor;
+        rCard.style.borderLeftColor = readableResultColor;
+
+        rQuote.innerHTML = data.quote;
+        rDesc.innerHTML = data.desc;
+        renderAdvanceResult(resultKey, advanceKey, allNormalized);
+
+        gsap.from([rCard], { y: 30, opacity: 0, duration: 0.8, delay: 0.2 });
+    }
+
+    function getShareQuestionSetText() {
+        if (currentCourse.isAdvance) {
+            const counts = currentQuestionSetMeta.typeCounts || {};
+            const activeTypes = getActiveTypes();
+            const values = activeTypes.map(t => Number(counts[t] || 0));
+            const allSame = values.length > 0 && values.every(v => v === values[0]);
+            const perAxis = allSame ? values[0] : Math.round((currentCourse.count || activeQuestions.length || 0) / 8);
+            return `ALL:${perAxis}`;
+        }
+        return getQuestionSetText();
+    }
+
+    function shareOnTwitter() {
+        const course = currentCourse.shareName || 'UNKNOWN COURSE';
+        const questionSet = getShareQuestionSetText();
+        const resultCode = document.getElementById('result-code').innerText.trim();
+        const hashtags = "Mtps思想診断";
+        const url = "https://metalepsis-delta.com";
+        let text;
+
+        if (currentCourse.isAdvance) {
+            const parts = resultCode.split('/').map(v => v.trim()).filter(Boolean);
+            const mainCode = parts[0] || 'N';
+            const advCode = parts[1] || 'N';
+            text = `【Mtps思想診断】
+${course}
+問題構成: ${questionSet}
+[Main] ${mainCode}
+[Adv] ${advCode}`;
+        } else {
+            const title = document.getElementById('result-title').innerText;
+            text = `【Mtps思想診断】
+${course}
+問題構成: ${questionSet}
+診断結果: ${title}`;
+        }
+
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}&url=${encodeURIComponent(url)}`;
+
+        window.open(tweetUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    function openHashtagResults() {
+        const hashtagUrl = "https://x.com/hashtag/Mtps%E6%80%9D%E6%83%B3%E8%A8%BA%E6%96%AD?src=hashtag_click";
+        window.open(hashtagUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    function restartQuiz() {
+        switchScreen(resultScreen, deviceScreen);
+    }
+</script>
+</body>
+</html>
