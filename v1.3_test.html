@@ -464,44 +464,47 @@
             gap: 0.8rem;
         }
 
-        .menu-button-row {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-        }
-
+        .menu-button-row,
         .menu-sub-button-row {
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.75rem;
+            gap: 0.9rem;
             flex-wrap: wrap;
         }
 
+        .menu-button-row {
+            margin-bottom: 0.25rem;
+        }
+
         .btn-database,
+        .btn-stats,
         .btn-notice,
         .btn-credit,
-        .btn-history {
+        .btn-history,
+        .btn-theme {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: fit-content;
-            margin: 0.25rem;
+            margin: 0.2rem;
             font-family: var(--font-mono);
         }
 
-        .btn-database {
-            min-width: 280px;
-            padding: 0.85rem 2.4rem;
+        .btn-database,
+        .btn-stats {
+            width: min(280px, 42vw);
+            min-width: 240px;
+            padding: 0.85rem 2rem;
             font-size: 1.05rem;
-            border-color: var(--color-accent);
-            color: var(--color-accent);
+            letter-spacing: 0.16em;
             background: rgba(100, 255, 218, 0.08);
             box-shadow: 0 0 18px rgba(100, 255, 218, 0.12), inset 0 0 18px rgba(100, 255, 218, 0.04);
+        }
+
+        .btn-database {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
         }
         .btn-database:hover {
             background: var(--color-accent);
@@ -510,13 +513,28 @@
             transform: translateY(-1px);
         }
 
+        .btn-stats {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.06);
+        }
+        .btn-stats:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 26px rgba(100, 255, 218, 0.45);
+            transform: translateY(-1px);
+        }
+
         .btn-notice,
         .btn-credit,
-        .btn-history {
+        .btn-history,
+        .btn-theme {
+            width: 135px;
             min-width: 135px;
-            font-size: 0.85rem;
-            padding: 0.45rem 1.2rem;
+            font-size: 0.82rem;
+            padding: 0.45rem 1rem;
             opacity: 0.95;
+            letter-spacing: 0.14em;
         }
 
         .btn-history {
@@ -551,9 +569,6 @@
 
 
         .btn-theme {
-            min-width: 150px;
-            font-size: 0.85rem;
-            padding: 0.45rem 1.2rem;
             border-color: #f7c948;
             color: #f7c948;
         }
@@ -1867,6 +1882,22 @@
             width: min(100%, 620px);
         }
 
+
+        @media (max-width: 720px) {
+            .btn-database,
+            .btn-stats {
+                width: min(100%, 320px);
+                min-width: 0;
+            }
+            .btn-notice,
+            .btn-credit,
+            .btn-history,
+            .btn-theme {
+                width: min(48%, 155px);
+                min-width: 130px;
+            }
+        }
+
         body.mode-desktop .course-panel .mode-btn {
             min-height: 76px;
             padding: 1.15rem 1.5rem;
@@ -2008,7 +2039,7 @@
 
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>IDEOLOGY PROFILER test</h1>
+            <h1>IDEOLOGY PROFILER v1.6.3</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
@@ -2114,13 +2145,13 @@
             <div class="menu-action-box">
                 <div class="menu-button-row">
                     <button class="btn btn-database" onclick="showDatabase()">DATABASE</button>
-                    <div class="menu-sub-button-row">
-                        <button class="btn btn-notice" onclick="showMainNotice()">NOTICE</button>
-                        <button class="btn btn-credit" onclick="showCredit()">CREDIT</button>
-                        <button class="btn btn-history" onclick="showHistory()">HISTORY</button>
-                        <button class="btn btn-stats" onclick="showPublicStats()">PUBLIC STATS</button>
-                        <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()">LIGHT MODE</button>
-                    </div>
+                    <button class="btn btn-stats" onclick="showPublicStats()">PUBLIC STATS</button>
+                </div>
+                <div class="menu-sub-button-row">
+                    <button class="btn btn-notice" onclick="showMainNotice()">NOTICE</button>
+                    <button class="btn btn-credit" onclick="showCredit()">CREDIT</button>
+                    <button class="btn btn-history" onclick="showHistory()">HISTORY</button>
+                    <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()">LIGHT MODE</button>
                 </div>
                 <div class="author-link-box">
                     AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
