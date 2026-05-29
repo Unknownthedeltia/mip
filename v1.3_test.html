@@ -1937,7 +1937,7 @@
 
         <!-- Screen 0.5: Course Warning / MAX PRECISION only -->
         <div id="warning-screen" class="screen">
-            <h1 style="font-family: var(--font-mono); color: var(--color-a); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);">MAX WARNING</h1>
+            <h1 style="font-family: var(--font-mono); color: var(--color-a); text-shadow: 0 0 10px rgba(255, 71, 87, 0.3);">WARNING!</h1>
             <div class="warning-box">
                 <h3>最精密思想診断 / 200 QUESTION NOTICE</h3>
                 <ul>
@@ -1945,6 +1945,7 @@
                     <li>通常MAXではA/B/C/Dを均等に扱い、通常モード内で最も精密に判定します。</li>
                     <li>質問には強い表現や極端な価値観を扱うものがあります。診断結果は絶対的な評価ではなく、エンターテインメントとして扱ってください。</li>
                     <li>長時間になるため、疲れた場合は無理に続けず休憩してください。</li>
+                    <li>この診断を途中で退出した場合の記録は保存されません。</li>
                 </ul>
             </div>
             <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
@@ -1955,7 +1956,7 @@
 
         <!-- Screen 0.6: Advance MAX 400 Warning -->
         <div id="advance-max-warning-screen" class="screen">
-            <h1 style="font-family: var(--font-mono); color: var(--color-e); text-shadow: 0 0 10px rgba(255, 176, 32, 0.35);">ADVANCE MAX WARNING</h1>
+            <h1 style="font-family: var(--font-mono); color: var(--color-e); text-shadow: 0 0 10px rgba(255, 176, 32, 0.35);">ADVANCE WARNING!</h1>
             <div class="warning-box advance-max-warning-box">
                 <h3>Advance Max Precision / 400 QUESTION NOTICE</h3>
                 <ul>
@@ -1964,6 +1965,7 @@
                     <li>回答時間の目安は60〜120分です。途中で疲れた場合は無理に続けないでください。</li>
                     <li>質問には極端な価値観や強い表現が含まれます。結果は絶対的評価ではなく、エンターテインメントとして扱ってください。</li>
                     <li>長時間の回答になるため、集中できる環境で行うことを推奨します。</li>
+                    <li>この診断を途中で退出した場合の記録は保存されません。</li>
                 </ul>
             </div>
             <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
@@ -1974,7 +1976,7 @@
 
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>IDEOLOGY PROFILER v1.6.1</h1>
+            <h1>IDEOLOGY PROFILER v1.3.foo</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
@@ -2102,6 +2104,7 @@
                 <ul>
                     <li>正確な結果を得るために、直感に従って正直に回答してください。</li>
                     <li>この診断結果は絶対的なものではありません。あくまでエンターテインメントとしてお楽しみいただき、結果を鵜呑みにしないでください。</li>
+                    <li>途中で退出した場合の記録は保存されません。</li>
                     <li>
                         バグ報告・お問い合わせは下記までお願いします。<br>
                         Email: unknownthedelta@gmail.com<br>
@@ -4385,7 +4388,7 @@
         const questionSet = getShareQuestionSetText();
         const resultCode = document.getElementById('result-code').innerText.trim();
         const hashtags = "Mtps思想診断";
-        const url = "https://metalepsis-delta.com";
+        const url = "https://unknownthedeltia.github.io/mip/";
         let text;
 
         if (currentCourse.isAdvance) {
