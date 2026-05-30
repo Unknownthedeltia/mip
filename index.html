@@ -3,13 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mtps思想診断</title>
+    <title>Mtps思想診断ツール</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <!-- GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Firebase -->
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+      import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-analytics.js";
+      import {
+        getFirestore,
+        doc,
+        setDoc,
+        collection,
+        getDocs,
+        increment,
+        serverTimestamp
+      } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+
+      // Your web app's Firebase configuration
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+        apiKey: "AIzaSyAsljjKcOD0ZIuab4DRemhETjE0Oj1bQNc",
+        authDomain: "mtps-95319.firebaseapp.com",
+        projectId: "mtps-95319",
+        storageBucket: "mtps-95319.firebasestorage.app",
+        messagingSenderId: "190834159665",
+        appId: "1:190834159665:web:c0bd4668e8f52281726510",
+        measurementId: "G-YFJMSF58W9"
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      let analytics = null;
+      try {
+        if (await isSupported()) {
+          analytics = getAnalytics(app);
+        }
+      } catch (error) {
+        console.warn('Firebase Analytics is not available in this environment.', error);
+      }
+
+      const PUBLIC_STATS_COLLECTION = 'mtpsPublicStats';
+      const PUBLIC_STATS_COURSES = {
+        normal_standard: { mode: 'normal', label: 'Standard', questions: 24, allPerAxis: 6 },
+        normal_light: { mode: 'normal', label: 'Light Precision', questions: 48, allPerAxis: 12 },
+        normal_medium: { mode: 'normal', label: 'Medium Precision', questions: 72, allPerAxis: 18 },
+        normal_heavy: { mode: 'normal', label: 'Heavy Precision', questions: 100, allPerAxis: 25 },
+        normal_max: { mode: 'normal', label: 'Max Precision', questions: 200, allPerAxis: 50 },
+        advance_standard: { mode: 'advance', label: 'Advance Standard', questions: 40, allPerAxis: 5 },
+        advance_light: { mode: 'advance', label: 'Advance Light Precision', questions: 96, allPerAxis: 12 },
+        advance_medium: { mode: 'advance', label: 'Advance Medium Precision', questions: 144, allPerAxis: 18 },
+        advance_heavy: { mode: 'advance', label: 'Advance Heavy Precision', questions: 200, allPerAxis: 25 },
+        advance_max: { mode: 'advance', label: 'Advance Max Precision', questions: 400, allPerAxis: 50 }
+      };
+
+      // Firestore field names are kept ASCII-safe so result codes like A++, !A, ∅, and A++/EG never break dot-path updates.
+      const STAT_KEY_TO_CODE = {
+        A_PLUS_PLUS: 'A++', A_PLUS: 'A+', A_MINUS: 'A-',
+        B_PLUS_PLUS: 'B++', B_PLUS: 'B+', B_MINUS: 'B-',
+        C_PLUS_PLUS: 'C++', C_PLUS: 'C+', C_MINUS: 'C-',
+        D_PLUS_PLUS: 'D++', D_PLUS: 'D+', D_MINUS: 'D-',
+        NOT_A: '!A', NOT_B: '!B', NOT_C: '!C', NOT_D: '!D',
+        AB: 'AB', AC: 'AC', AD: 'AD', BC: 'BC', BD: 'BD', CD: 'CD',
+        AB_SHARP: 'AB#', AC_SHARP: 'AC#', AD_SHARP: 'AD#', BC_SHARP: 'BC#', BD_SHARP: 'BD#', CD_SHARP: 'CD#',
+        ABC: 'ABC', ABD: 'ABD', ACD: 'ACD', BCD: 'BCD',
+        N: 'N', N_PLUS: 'N+', N_MINUS: 'N-', EMPTY: '∅', NEUTRAL: 'N',
+        E: 'E', F: 'F', G: 'G', H: 'H',
+        E_PLUS_PLUS: 'E++', F_PLUS_PLUS: 'F++', G_PLUS_PLUS: 'G++', H_PLUS_PLUS: 'H++',
+        EG: 'EG', EH: 'EH', FG: 'FG', FH: 'FH', EF: 'EF', GH: 'GH'
+      };
+      const CODE_TO_STAT_KEY = Object.fromEntries(Object.entries(STAT_KEY_TO_CODE).map(([k, v]) => [v, k]));
+
+      function encodeStatKey(code) {
+        const normalized = String(code || 'N').trim() || 'N';
+        if (CODE_TO_STAT_KEY[normalized]) return CODE_TO_STAT_KEY[normalized];
+        return normalized
+          .replace(/∅/g, 'EMPTY')
+          .replace(/!/g, 'NOT_')
+          .replace(/\+/g, '_PLUS')
+          .replace(/#/g, '_SHARP')
+          .replace(/\//g, '__')
+          .replace(/[^A-Za-z0-9_]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '') || 'UNKNOWN';
+      }
+
+      function decodeStatKey(key) {
+        const safe = String(key || 'N');
+        if (STAT_KEY_TO_CODE[safe]) return STAT_KEY_TO_CODE[safe];
+        return safe
+          .replace(/__/g, '/')
+          .replace(/_SHARP/g, '#')
+          .replace(/_PLUS/g, '+')
+          .replace(/^NOT_/, '!')
+          .replace(/EMPTY/g, '∅');
+      }
+
+      async function submitPublicStats(payload) {
+        if (!payload || !payload.courseId || !PUBLIC_STATS_COURSES[payload.courseId]) {
+          throw new Error('Invalid public stats payload.');
+        }
+        const course = PUBLIC_STATS_COURSES[payload.courseId];
+        const mainCode = String(payload.mainResult || 'N').trim() || 'N';
+        // Use nested map objects here. In setDoc(..., { merge: true }), a key like
+        // "mainResults.A_PLUS" would be saved as a literal root field, not as
+        // mainResults: { A_PLUS: ... }. Nested objects keep the UI and Firestore data aligned.
+        const updateData = {
+          mode: course.mode,
+          courseId: payload.courseId,
+          courseName: course.label,
+          questions: course.questions,
+          allPerAxis: course.allPerAxis,
+          total: increment(1),
+          updatedAt: serverTimestamp(),
+          mainResults: {
+            [encodeStatKey(mainCode)]: increment(1)
+          }
+        };
+
+        if (course.mode === 'advance') {
+          const advCode = String(payload.advanceResult || 'N').trim() || 'N';
+          updateData.advanceResults = {
+            [encodeStatKey(advCode)]: increment(1)
+          };
+          updateData.comboResults = {
+            [encodeStatKey(`${mainCode}/${advCode}`)]: increment(1)
+          };
+        }
+
+        await setDoc(doc(db, PUBLIC_STATS_COLLECTION, payload.courseId), updateData, { merge: true });
+      }
+
+      function normalizePublicStatsDoc(data) {
+        const normalized = { ...data };
+        const buckets = ['mainResults', 'advanceResults', 'comboResults'];
+        buckets.forEach((bucket) => {
+          if (!normalized[bucket] || typeof normalized[bucket] !== 'object' || Array.isArray(normalized[bucket])) {
+            normalized[bucket] = {};
+          } else {
+            normalized[bucket] = { ...normalized[bucket] };
+          }
+        });
+
+        // Compatibility for v1.6.0 data that was accidentally saved as root fields like
+        // "mainResults.A_PLUS". This makes old counts visible without manual deletion.
+        Object.entries(data || {}).forEach(([field, value]) => {
+          const parts = field.split('.');
+          if (parts.length === 2 && buckets.includes(parts[0])) {
+            const count = Number(value || 0);
+            if (Number.isFinite(count)) {
+              normalized[parts[0]][parts[1]] = Number(normalized[parts[0]][parts[1]] || 0) + count;
+            }
+          }
+        });
+
+        return normalized;
+      }
+
+      async function loadPublicStats() {
+        const snap = await getDocs(collection(db, PUBLIC_STATS_COLLECTION));
+        const stats = {};
+        snap.forEach((d) => { stats[d.id] = normalizePublicStatsDoc(d.data()); });
+        return stats;
+      }
+
+      // Make Firebase available to the non-module script below.
+      window.mtpsFirebase = {
+        app,
+        analytics,
+        db,
+        config: firebaseConfig,
+        publicStatsCourses: PUBLIC_STATS_COURSES,
+        submitPublicStats,
+        loadPublicStats,
+        encodeStatKey,
+        decodeStatKey
+      };
+    </script>
 
     <style>
         :root {
@@ -23,6 +201,10 @@
             --color-b: #2ed573; /* 共命包摂 Green */
             --color-c: #1e90ff; /* 適応進転 Blue */
             --color-d: #a4b0be; /* 無差総質 Gray */
+            --color-e: #ffb020; /* 境界固定 Orange */
+            --color-f: #c084fc; /* 境界流動 Purple */
+            --color-g: #f97316; /* 即応介入 Amber */
+            --color-h: #14b8a6; /* 観測保留 Teal */
 
             --font-main: 'Noto Sans JP', sans-serif;
             --font-mono: 'Share Tech Mono', monospace;
@@ -43,6 +225,10 @@
             --color-b: #0f9f68;
             --color-c: #1565c0;
             --color-d: #54616f;
+            --color-e: #b45309;
+            --color-f: #7e22ce;
+            --color-g: #c2410c;
+            --color-h: #0f766e;
         }
 
         * {
@@ -279,44 +465,47 @@
             gap: 0.8rem;
         }
 
-        .menu-button-row {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-        }
-
+        .menu-button-row,
         .menu-sub-button-row {
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.75rem;
+            gap: 0.9rem;
             flex-wrap: wrap;
         }
 
+        .menu-button-row {
+            margin-bottom: 0.25rem;
+        }
+
         .btn-database,
+        .btn-stats,
         .btn-notice,
         .btn-credit,
-        .btn-history {
+        .btn-history,
+        .btn-theme {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: fit-content;
-            margin: 0.25rem;
+            margin: 0.2rem;
             font-family: var(--font-mono);
         }
 
-        .btn-database {
-            min-width: 280px;
-            padding: 0.85rem 2.4rem;
+        .btn-database,
+        .btn-stats {
+            width: min(280px, 42vw);
+            min-width: 240px;
+            padding: 0.85rem 2rem;
             font-size: 1.05rem;
-            border-color: var(--color-accent);
-            color: var(--color-accent);
+            letter-spacing: 0.16em;
             background: rgba(100, 255, 218, 0.08);
             box-shadow: 0 0 18px rgba(100, 255, 218, 0.12), inset 0 0 18px rgba(100, 255, 218, 0.04);
+        }
+
+        .btn-database {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
         }
         .btn-database:hover {
             background: var(--color-accent);
@@ -325,13 +514,28 @@
             transform: translateY(-1px);
         }
 
+        .btn-stats {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+            background: rgba(100, 255, 218, 0.06);
+        }
+        .btn-stats:hover {
+            background: var(--color-accent);
+            color: var(--color-bg);
+            box-shadow: 0 0 26px rgba(100, 255, 218, 0.45);
+            transform: translateY(-1px);
+        }
+
         .btn-notice,
         .btn-credit,
-        .btn-history {
+        .btn-history,
+        .btn-theme {
+            width: 135px;
             min-width: 135px;
-            font-size: 0.85rem;
-            padding: 0.45rem 1.2rem;
+            font-size: 0.82rem;
+            padding: 0.45rem 1rem;
             opacity: 0.95;
+            letter-spacing: 0.14em;
         }
 
         .btn-history {
@@ -366,9 +570,6 @@
 
 
         .btn-theme {
-            min-width: 150px;
-            font-size: 0.85rem;
-            padding: 0.45rem 1.2rem;
             border-color: #f7c948;
             color: #f7c948;
         }
@@ -1084,6 +1285,136 @@
             font-size: 0.85rem;
         }
 
+
+        /* --- Public Stats Screen --- */
+        .stats-box {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 1rem;
+            text-align: left;
+        }
+        .stats-toolbar {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1rem 0 1.5rem;
+        }
+        .stats-course-card {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-left: 4px solid var(--color-accent);
+            padding: 1.1rem;
+            margin-bottom: 1rem;
+            border-radius: 10px;
+        }
+        body.theme-light .stats-course-card {
+            background: rgba(255,255,255,0.82);
+            border-color: rgba(15,23,42,0.14);
+            box-shadow: 0 8px 20px rgba(15,23,42,0.06);
+        }
+        .stats-course-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: flex-start;
+            margin-bottom: 0.8rem;
+        }
+        .stats-course-title {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 1.05rem;
+            letter-spacing: 0.04em;
+        }
+        .stats-total {
+            color: var(--color-text);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+        .stats-section-title {
+            color: var(--color-text);
+            font-weight: 700;
+            margin: 0.8rem 0 0.5rem;
+            font-size: 0.9rem;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 0.45rem;
+        }
+        .stats-chip {
+            background: rgba(255,255,255,0.045);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 0.55rem 0.6rem;
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+        body.theme-light .stats-chip {
+            background: rgba(15,23,42,0.035);
+            border-color: rgba(15,23,42,0.12);
+        }
+        .stats-chip strong {
+            display: block;
+            color: var(--color-text);
+            font-size: 0.9rem;
+        }
+        .stats-chip span {
+            color: var(--color-dim);
+        }
+        .stats-top3-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.6rem;
+            margin-bottom: 0.7rem;
+        }
+        .stats-rank-chip {
+            background: rgba(100, 255, 218, 0.08);
+            border: 1px solid rgba(100, 255, 218, 0.22);
+            padding: 0.75rem 0.8rem;
+            border-radius: 10px;
+            font-family: var(--font-mono);
+            line-height: 1.5;
+        }
+        body.theme-light .stats-rank-chip {
+            background: rgba(0, 128, 110, 0.08);
+            border-color: rgba(0, 128, 110, 0.22);
+        }
+        .stats-rank-chip strong {
+            display: block;
+            color: var(--color-accent);
+            font-size: 1rem;
+        }
+        .stats-rank-chip span {
+            display: block;
+            color: var(--color-text);
+            font-size: 0.82rem;
+        }
+        .stats-subtle-note {
+            color: var(--color-dim);
+            font-size: 0.78rem;
+            line-height: 1.6;
+            margin-bottom: 0.55rem;
+        }
+        .stats-empty, .stats-error, .stats-loading {
+            text-align: center;
+            color: var(--color-dim);
+            line-height: 1.8;
+            padding: 2rem 1rem;
+            border: 1px dashed rgba(148,163,184,0.35);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.03);
+        }
+        body.theme-light .stats-empty,
+        body.theme-light .stats-error,
+        body.theme-light .stats-loading {
+            background: rgba(15,23,42,0.035);
+            border-color: rgba(15,23,42,0.18);
+        }
+
         /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 8px;
@@ -1097,6 +1428,550 @@
         }
         ::-webkit-scrollbar-thumb:hover {
             background: var(--color-accent);
+        }
+
+
+        /* --- Advance Mode --- */
+        .advance-section-title {
+            width: 100%;
+            max-width: 600px;
+            margin: 2rem auto 0.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255,255,255,0.12);
+            color: var(--color-accent);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            letter-spacing: 0.12em;
+            text-align: center;
+        }
+        body.theme-light .advance-section-title { border-top-color: rgba(15,23,42,0.14); }
+        .mode-btn.advance { border-color: rgba(255,176,32,0.55); }
+        .mode-btn.advance:hover { border-color: var(--color-e); background: rgba(255,176,32,0.10); }
+        .mode-btn.advance .mode-info h3 { color: var(--color-e); }
+        .advance-visuals {
+            width: 100%;
+            display: none;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .advance-visuals.active { display: grid; }
+        .mini-chart-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+        .mini-chart-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 1rem;
+            text-align: center;
+        }
+        body.theme-light .mini-chart-card {
+            background: rgba(255,255,255,0.9);
+            border-color: rgba(15,23,42,0.12);
+        }
+        .mini-chart-title {
+            font-family: var(--font-mono);
+            color: var(--color-accent);
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+        }
+        .mini-pie {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            margin: 0 auto 0.75rem;
+            background: conic-gradient(from 0deg, #333 0% 100%);
+            box-shadow: 0 0 25px rgba(0,0,0,0.24);
+        }
+        .mini-pie::after {
+            content: attr(data-code);
+            position: absolute;
+            inset: 24%;
+            border-radius: 50%;
+            background: var(--color-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            font-size: 1.25rem;
+            color: var(--color-text);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        body.theme-light .mini-pie::after { border-color: rgba(15,23,42,0.12); }
+        .advance-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            text-align: left;
+            font-size: 0.76rem;
+            line-height: 1.45;
+        }
+        .advance-legend-row { display: flex; gap: 0.4rem; align-items: flex-start; }
+        .advance-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 0.28rem; flex: 0 0 auto; }
+        .radar-wrap { width: 100%; overflow-x: auto; }
+        #radar-chart { max-width: 100%; height: auto; }
+        .advance-result-box {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.025);
+            border-radius: 14px;
+            line-height: 1.75;
+        }
+        body.theme-light .advance-result-box {
+            border-color: rgba(15,23,42,0.12);
+            background: rgba(255,255,255,0.88);
+            color: #1f2937;
+        }
+        .advance-result-code {
+            font-family: var(--font-mono);
+            color: var(--color-e);
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 0.35rem;
+        }
+
+
+        /* --- Result Layout Refresh v1.5.2 --- */
+        #result-screen .screen-title-spacer { display: none; }
+        .result-content {
+            align-items: stretch;
+        }
+        .chart-wrapper,
+        .result-text-area {
+            min-width: 0;
+        }
+        .result-text-area {
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-left-width: 4px;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.22);
+        }
+        body.theme-light .result-text-area {
+            background: rgba(255,255,255,0.92);
+            border-color: rgba(15,23,42,0.12);
+            box-shadow: 0 18px 45px rgba(15,23,42,0.10);
+        }
+        #result-code {
+            max-width: 90%;
+            text-align: center;
+            line-height: 1;
+            overflow-wrap: anywhere;
+            font-size: clamp(1.55rem, 4.2vw, 2.5rem) !important;
+        }
+        .chart-overlay span:first-child {
+            letter-spacing: 0.14em;
+        }
+        #result-legend {
+            width: 100%;
+            max-width: 780px;
+        }
+        #result-legend .legend-note {
+            width: 100%;
+            text-align: center;
+            color: var(--color-dim);
+            font-size: 0.78rem;
+            margin-bottom: 0.25rem;
+            line-height: 1.5;
+        }
+        #result-legend .legend-item {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 0.55rem 0.65rem;
+            line-height: 1.45;
+            align-items: flex-start;
+        }
+        body.theme-light #result-legend .legend-item {
+            background: rgba(255,255,255,0.86);
+            border-color: rgba(15,23,42,0.12);
+            color: #1f2937;
+        }
+        .legend-color { margin-top: 0.28rem; flex: 0 0 auto; }
+        #result-course {
+            display: inline-block;
+            padding: 0.35rem 0.55rem;
+            border: 1px solid rgba(100,255,218,0.20);
+            border-radius: 999px;
+            background: rgba(100,255,218,0.05);
+        }
+        body.theme-light #result-course {
+            background: rgba(0,112,96,0.06);
+            border-color: rgba(0,112,96,0.16);
+        }
+
+        #result-screen.advance-result-mode .result-content {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            align-content: start;
+            align-items: stretch;
+            width: 100%;
+        }
+        body.mode-desktop #result-screen.advance-result-mode .result-content {
+            padding: 1rem 1.25rem;
+            height: 100%;
+            overflow-y: auto;
+        }
+        #result-screen.advance-result-mode .chart-wrapper {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(220px, 300px) 1fr;
+            grid-template-areas:
+                "mainpie mainlegend"
+                "advance advance";
+            gap: 1rem;
+            align-items: center;
+            justify-items: center;
+            padding: 1rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 18px;
+            background: rgba(255,255,255,0.025);
+        }
+        body.theme-light #result-screen.advance-result-mode .chart-wrapper {
+            background: rgba(255,255,255,0.82);
+            border-color: rgba(15,23,42,0.12);
+            box-shadow: 0 18px 45px rgba(15,23,42,0.08);
+        }
+        #result-screen.advance-result-mode #pie-chart {
+            grid-area: mainpie;
+            width: min(260px, 72vw);
+            height: min(260px, 72vw);
+            margin: 0;
+        }
+        #result-screen.advance-result-mode #result-legend {
+            grid-area: mainlegend;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+            gap: 0.6rem;
+            max-width: none;
+            justify-content: stretch;
+            font-size: 0.78rem;
+        }
+        #result-screen.advance-result-mode #result-legend .legend-note {
+            grid-column: 1 / -1;
+            text-align: left;
+            margin-bottom: 0;
+            padding: 0.2rem 0;
+        }
+        #result-screen.advance-result-mode .advance-visuals {
+            grid-area: advance;
+            width: 100%;
+            margin-top: 0.25rem;
+        }
+        #result-screen.advance-result-mode .mini-chart-grid {
+            grid-template-columns: repeat(3, minmax(210px, 1fr));
+            gap: 0.85rem;
+        }
+        #result-screen.advance-result-mode .mini-chart-card {
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #result-screen.advance-result-mode .mini-pie {
+            width: 150px;
+            height: 150px;
+        }
+        #result-screen.advance-result-mode .mini-pie::after {
+            font-size: 1.05rem;
+        }
+        #result-screen.advance-result-mode .advance-legend {
+            font-size: 0.73rem;
+        }
+        #result-screen.advance-result-mode #radar-chart {
+            width: 220px;
+            height: 220px;
+            margin: 0 auto;
+        }
+        #result-screen.advance-result-mode .result-text-area {
+            max-height: none;
+            overflow: visible;
+        }
+        #advance-result-box {
+            border-left: 4px solid var(--color-e);
+        }
+
+        @media (max-width: 760px) {
+            #result-screen.advance-result-mode .chart-wrapper {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "mainpie"
+                    "mainlegend"
+                    "advance";
+                padding: 0.85rem;
+            }
+            #result-screen.advance-result-mode #result-legend {
+                grid-template-columns: 1fr;
+            }
+            #result-screen.advance-result-mode .mini-chart-grid {
+                grid-template-columns: 1fr;
+            }
+            #result-screen.advance-result-mode #pie-chart {
+                width: min(250px, 72vw);
+                height: min(250px, 72vw);
+            }
+        }
+
+
+        /* --- Course Mode Switcher --- */
+        .course-mode-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto 1.25rem;
+            flex-wrap: wrap;
+        }
+        .course-tab-btn {
+            flex: 1 1 220px;
+            border: 1px solid rgba(255,255,255,0.16);
+            background: rgba(255,255,255,0.035);
+            color: var(--color-dim);
+            padding: 0.85rem 1rem;
+            font-family: var(--font-mono);
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: 0.25s ease;
+            border-radius: 10px;
+        }
+        .course-tab-btn:hover {
+            border-color: var(--color-accent);
+            color: var(--color-accent);
+            background: rgba(100,255,218,0.08);
+        }
+        .course-tab-btn.active {
+            border-color: var(--color-accent);
+            color: var(--color-bg);
+            background: var(--color-accent);
+            box-shadow: 0 0 18px rgba(100,255,218,0.28);
+        }
+        .course-tab-btn.advance-tab.active {
+            border-color: var(--color-e);
+            background: var(--color-e);
+            box-shadow: 0 0 18px rgba(255,176,32,0.30);
+        }
+        body.theme-light .course-tab-btn {
+            border-color: rgba(15,23,42,0.16);
+            background: rgba(255,255,255,0.82);
+            color: #475569;
+        }
+        body.theme-light .course-tab-btn.active { color: #03140f; }
+        .course-panel {
+            display: none;
+            width: 100%;
+            animation: coursePanelFade 0.25s ease;
+        }
+        .course-panel.active { display: block; }
+        @keyframes coursePanelFade {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .course-panel-note {
+            width: 100%;
+            max-width: 620px;
+            margin: 0 auto 0.9rem;
+            color: var(--color-dim);
+            text-align: center;
+            font-size: 0.82rem;
+            line-height: 1.7;
+        }
+
+
+        /* --- Centering fixes for course buttons --- */
+        .course-panel.active {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .course-panel .mode-select-grid {
+            width: min(100%, 620px);
+            max-width: 620px;
+            margin-left: auto;
+            margin-right: auto;
+            justify-items: stretch;
+        }
+
+        .course-panel .mode-btn {
+            width: 100%;
+            min-height: 86px;
+        }
+
+        .course-mode-tabs {
+            width: min(100%, 620px);
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .course-tab-btn {
+            text-align: center;
+        }
+
+        body.mode-mobile .course-panel .mode-select-grid,
+        body.mode-mobile .course-mode-tabs {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        body.mode-mobile .course-tab-btn {
+            flex-basis: 100%;
+        }
+
+        .advance-max-warning-box {
+            background: rgba(255, 176, 32, 0.08);
+            border-color: var(--color-e);
+        }
+        .advance-max-warning-box h3 {
+            color: var(--color-e);
+            border-bottom-color: rgba(255,176,32,0.34);
+        }
+        .advance-max-warning-box li::before { color: var(--color-e); }
+
+
+    
+
+        /* --- Text cutoff / viewport overflow fixes (v1.5.4) --- */
+        /* --- Database Advance Axis result list update (v1.5.5) --- */
+        /* --- Short Advance share text (v1.5.7) --- */
+        body.mode-desktop {
+            height: auto;
+            min-height: 100vh;
+            overflow-y: auto;
+            align-items: flex-start;
+            padding: 1rem 0;
+        }
+
+        body.mode-desktop .container {
+            height: auto;
+            min-height: calc(100vh - 2rem);
+        }
+
+        /* The menu can become taller than the viewport, especially after Advance was added.
+           Keep it top-aligned and scrollable instead of vertically centering it into a crop. */
+        body.mode-desktop #intro-screen {
+            justify-content: flex-start;
+            overflow-y: auto;
+            padding-top: clamp(1rem, 2.4vh, 2rem);
+            padding-bottom: 2rem;
+        }
+
+        body.mode-desktop #intro-screen h1 {
+            font-size: clamp(1.65rem, 3.2vw, calc(2.5rem * var(--font-scale)));
+            line-height: 1.25;
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        body.mode-desktop #intro-screen .subtitle {
+            margin-bottom: 1.5rem;
+        }
+
+        body.mode-desktop .course-mode-tabs,
+        body.mode-desktop .course-panel .mode-select-grid {
+            width: min(100%, 620px);
+        }
+
+
+        @media (max-width: 720px) {
+            .btn-database,
+            .btn-stats {
+                width: min(100%, 320px);
+                min-width: 0;
+            }
+            .btn-notice,
+            .btn-credit,
+            .btn-history,
+            .btn-theme {
+                width: min(48%, 155px);
+                min-width: 130px;
+            }
+        }
+
+        body.mode-desktop .course-panel .mode-btn {
+            min-height: 76px;
+            padding: 1.15rem 1.5rem;
+        }
+
+        body.mode-desktop .mode-info h3 {
+            line-height: 1.25;
+        }
+
+        body.mode-desktop .mode-info p,
+        body.mode-desktop .time-est {
+            line-height: 1.55;
+        }
+
+        body.mode-desktop .menu-action-box {
+            margin-top: 1.4rem;
+            padding-bottom: 0.5rem;
+        }
+
+        @media (max-height: 820px) {
+            body.mode-desktop {
+                padding: 0.5rem 0;
+            }
+            body.mode-desktop .container {
+                min-height: calc(100vh - 1rem);
+            }
+            body.mode-desktop #intro-screen {
+                padding-top: 0.8rem;
+                padding-bottom: 1.2rem;
+            }
+            body.mode-desktop #intro-screen h1 {
+                font-size: clamp(1.35rem, 2.6vw, 2rem);
+                letter-spacing: 0.16em;
+                margin-bottom: 0.5rem;
+            }
+            body.mode-desktop #intro-screen .subtitle {
+                margin-bottom: 1rem;
+            }
+            body.mode-desktop .course-panel-note {
+                margin-bottom: 0.6rem;
+                line-height: 1.55;
+            }
+            body.mode-desktop .course-panel .mode-select-grid {
+                gap: 0.75rem;
+            }
+            body.mode-desktop .course-panel .mode-btn {
+                min-height: 70px;
+                padding: 0.95rem 1.35rem;
+            }
+            body.mode-desktop .menu-action-box {
+                margin-top: 1rem;
+                gap: 0.55rem;
+            }
+        }
+
+        @media (max-height: 700px) {
+            body.mode-desktop #intro-screen h1 {
+                font-size: clamp(1.15rem, 2.2vw, 1.65rem);
+            }
+            body.mode-desktop .course-panel .mode-btn {
+                min-height: 64px;
+                padding: 0.75rem 1.2rem;
+            }
+            body.mode-desktop .mode-info h3 {
+                font-size: 1rem;
+                margin-bottom: 0.15rem;
+            }
+            body.mode-desktop .mode-info p {
+                font-size: 0.74rem;
+            }
+            body.mode-desktop .time-est {
+                font-size: 0.7rem;
+            }
         }
 
     </style>
@@ -1132,8 +2007,8 @@
             <div class="warning-box">
                 <h3>最精密思想診断 / 200 QUESTION NOTICE</h3>
                 <ul>
-                    <li>このコースは200問すべてに回答する最長モードです。目安時間は30〜60分です。</li>
-                    <li>A/B/C/Dを各50問に揃えた全問バランス補正により、最も精密に判定します。</li>
+                    <li>このコースは200問の長時間精密モードです。A/B/C/Dの4観点を各50問ずつ測定します。</li>
+                    <li>通常MAXではA/B/C/Dを均等に扱い、通常モード内で最も精密に判定します。</li>
                     <li>質問には強い表現や極端な価値観を扱うものがあります。診断結果は絶対的な評価ではなく、エンターテインメントとして扱ってください。</li>
                     <li>長時間になるため、疲れた場合は無理に続けず休憩してください。</li>
                     <li>この診断を途中で退出した場合の記録は保存されません。</li>
@@ -1145,57 +2020,144 @@
             </div>
         </div>
 
+        <!-- Screen 0.6: Advance MAX 400 Warning -->
+        <div id="advance-max-warning-screen" class="screen">
+            <h1 style="font-family: var(--font-mono); color: var(--color-e); text-shadow: 0 0 10px rgba(255, 176, 32, 0.35);">ADVANCE MAX WARNING</h1>
+            <div class="warning-box advance-max-warning-box">
+                <h3>Advance Max Precision / 400 QUESTION NOTICE</h3>
+                <ul>
+                    <li>このコースは400問の超長時間モードです。A〜Hの8観点を各50問ずつ測定します。</li>
+                    <li>Main Ideology、Advance Axis、A〜Hレーダーチャートをすべて出すため、通常モードより情報量が多くなります。</li>
+                    <li>回答時間の目安は60〜120分です。途中で疲れた場合は無理に続けないでください。</li>
+                    <li>質問には極端な価値観や強い表現が含まれます。結果は絶対的評価ではなく、エンターテインメントとして扱ってください。</li>
+                    <li>長時間の回答になるため、集中できる環境で行うことを推奨します。</li>
+                    <li>この診断を途中で退出した場合の記録は保存されません。</li>
+                </ul>
+            </div>
+            <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+                <button class="btn" onclick="hideCourseWarning()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK</button>
+                <button class="btn" onclick="confirmCourseWarning()" style="border-color: var(--color-e); color: var(--color-e);">AGREE & START</button>
+            </div>
+        </div>
+
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>IDEOLOGY PROFILER v1.2.0</h1>
+            <h1>IDEOLOGY PROFILER v1.3.0</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
             
-            <div class="mode-select-grid">
-                <div class="mode-btn" onclick="startQuiz(25)">
-                    <div class="mode-info">
-                        <h3>STANDARD</h3>
-                        <p>一般思想診断 / 25問 / 固定バランス抽出</p>
-                        <p class="time-est">目安時間: 3~8分</p>
+            <div class="course-mode-tabs" role="tablist" aria-label="診断種別の切り替え">
+                <button id="normal-tab-btn" class="course-tab-btn active" onclick="setCoursePanel('normal')" type="button">NORMAL MODE</button>
+                <button id="advance-tab-btn" class="course-tab-btn advance-tab" onclick="setCoursePanel('advance')" type="button">ADVANCE MODE</button>
+            </div>
+
+            <div id="normal-course-panel" class="course-panel active">
+                <p class="course-panel-note">A/B/C/Dの4観点で診断します。まずはこちらが基本モードです。</p>
+                <div class="mode-select-grid">
+                    <div class="mode-btn" onclick="startQuiz(24)">
+                        <div class="mode-info">
+                            <h3>STANDARD</h3>
+                            <p>一般思想診断 / 24問 / ALL:6 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 3~8分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
                     </div>
-                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    <div class="mode-btn" onclick="startQuiz(48)">
+                        <div class="mode-info">
+                            <h3>LIGHT PRECISION</h3>
+                            <p>軽精密思想診断 / 48問 / ALL:12 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 8~15分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn" onclick="startQuiz(72)">
+                        <div class="mode-info">
+                            <h3>MEDIUM PRECISION</h3>
+                            <p>中精密思想診断 / 72問 / ALL:18 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 12~25分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn" onclick="startQuiz(100)">
+                        <div class="mode-info">
+                            <h3>HEAVY PRECISION</h3>
+                            <p>重精密思想診断 / 100問 / ALL:25 / 固定バランス抽出</p>
+                            <p class="time-est">目安時間: 15~30分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
+                    </div>
+                    <div class="mode-btn danger" onclick="showCourseWarning(200)">
+                        <div class="mode-info">
+                            <h3>MAX PRECISION</h3>
+                            <p>最精密思想診断 / 200問 / ALL:50 / 全問バランス補正</p>
+                            <p class="time-est">目安時間: 30~60分</p>
+                        </div>
+                        <span class="danger-mark" style="font-family: var(--font-mono);">!!</span>
+                    </div>
                 </div>
-                <div class="mode-btn" onclick="startQuiz(50)">
-                    <div class="mode-info">
-                        <h3>LIGHT PRECISION</h3>
-                        <p>軽精密思想診断 / 50問 / 固定バランス抽出</p>
-                        <p class="time-est">目安時間: 8~15分</p>
+            </div>
+
+            <div id="advance-course-panel" class="course-panel">
+                <div class="advance-section-title" style="margin-top:0;">ADVANCE / A〜H 8観点診断</div>
+                <p class="course-panel-note">A〜DのMain Ideologyに加えて、E〜HのAdvance Axisも測定します。結果には補助軸とレーダーチャートが追加されます。</p>
+                <div class="mode-select-grid">
+                    <div class="mode-btn advance" onclick="startQuiz(40)">
+                        <div class="mode-info">
+                            <h3>ADVANCE STANDARD</h3>
+                            <p>8観点診断 / 40問 / ALL:5</p>
+                            <p class="time-est">目安時間: 5~12分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
                     </div>
-                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
-                </div>
-                <div class="mode-btn" onclick="startQuiz(100)">
-                    <div class="mode-info">
-                        <h3>HEAVY PRECISION</h3>
-                        <p>重精密思想診断 / 100問 / 固定バランス抽出</p>
-                        <p class="time-est">目安時間: 15~30分</p>
+                    <div class="mode-btn advance" onclick="startQuiz(96)">
+                        <div class="mode-info">
+                            <h3>ADVANCE LIGHT PRECISION</h3>
+                            <p>8観点診断 / 96問 / ALL:12</p>
+                            <p class="time-est">目安時間: 15~30分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
                     </div>
-                    <span style="font-family: var(--font-mono); color:var(--color-accent);">></span>
-                </div>
-                <div class="mode-btn danger" onclick="showCourseWarning(200)">
-                    <div class="mode-info">
-                        <h3>MAX PRECISION</h3>
-                        <p>最精密思想診断 / 200問 / 全問バランス補正</p>
-                        <p class="time-est">目安時間: 30~60分</p>
+                    <div class="mode-btn advance" onclick="startQuiz(144)">
+                        <div class="mode-info">
+                            <h3>ADVANCE MEDIUM PRECISION</h3>
+                            <p>8観点診断 / 144問 / ALL:18</p>
+                            <p class="time-est">目安時間: 25~45分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
                     </div>
-                    <span class="danger-mark" style="font-family: var(--font-mono);">!!</span>
+                    <div class="mode-btn advance" onclick="startQuiz(201)">
+                        <div class="mode-info">
+                            <h3>ADVANCE HEAVY PRECISION</h3>
+                            <p>8観点診断 / 200問 / ALL:25</p>
+                            <p class="time-est">目安時間: 30~60分</p>
+                        </div>
+                        <span style="font-family: var(--font-mono); color:var(--color-e);">></span>
+                    </div>
+                    <div class="mode-btn advance danger" onclick="showCourseWarning(400)">
+                        <div class="mode-info">
+                            <h3>ADVANCE MAX PRECISION</h3>
+                            <p>8観点診断 / 400問 / ALL:50</p>
+                            <p class="time-est">目安時間: 60~120分</p>
+                        </div>
+                        <span class="danger-mark" style="font-family: var(--font-mono);">!!</span>
+                    </div>
                 </div>
             </div>
 
             <div class="menu-action-box">
                 <div class="menu-button-row">
                     <button class="btn btn-database" onclick="showDatabase()">DATABASE</button>
-                    <div class="menu-sub-button-row">
-                        <button class="btn btn-notice" onclick="showMainNotice()">NOTICE</button>
-                        <button class="btn btn-credit" onclick="showCredit()">CREDIT</button>
-                        <button class="btn btn-history" onclick="showHistory()">HISTORY</button>
-                        <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()">LIGHT MODE</button>
-                    </div>
+                    <button class="btn btn-stats" onclick="showPublicStats()">PUBLIC STATS</button>
+                </div>
+                <div class="menu-sub-button-row">
+                    <button class="btn btn-notice" onclick="showMainNotice()">NOTICE</button>
+                    <button class="btn btn-credit" onclick="showCredit()">CREDIT</button>
+                    <button class="btn btn-history" onclick="showHistory()">HISTORY</button>
+                    <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()">LIGHT MODE</button>
+                </div>
+                <div class="author-link-box">
+                    AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
                 </div>
             </div>
         </div>
@@ -1208,6 +2170,7 @@
                 <ul>
                     <li>正確な結果を得るために、直感に従って正直に回答してください。</li>
                     <li>この診断結果は絶対的なものではありません。あくまでエンターテインメントとしてお楽しみいただき、結果を鵜呑みにしないでください。</li>
+                    <li>この診断を途中で退出した場合の記録は保存されません。</li>
                     <li>
                         バグ報告・お問い合わせは下記までお願いします。<br>
                         Email: unknownthedelta@gmail.com<br>
@@ -1236,6 +2199,10 @@
                         <div class="credit-role">Production support</div>
                         <div class="credit-name">Gemini、ChatGPT</div>
                     </div>
+                    <div class="credit-row">
+                        <div class="credit-role">Special Thanks</div>
+                        <div class="credit-name"><a href="https://x.com/Bipolar_xxx" target="_blank" rel="noopener noreferrer">Bipolar_xxx</a></div>
+                    </div>
                 </div>
             </div>
             <button class="btn" onclick="hideCredit()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
@@ -1253,6 +2220,27 @@
                     <button class="btn" onclick="clearHistory()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-a); color: var(--color-a);">CLEAR HISTORY</button>
                 </div>
                 <div id="history-list" class="history-list"></div>
+            </div>
+        </div>
+
+
+
+        <!-- Screen 1.45: Public Stats -->
+        <div id="public-stats-screen" class="screen">
+            <div class="stats-box">
+                <div style="text-align: center; margin-bottom: 1rem;">
+                    <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">PUBLIC STATS</h1>
+                    <p style="color: #888; font-size: 0.9rem; line-height:1.7;">
+                        Firebase Firestoreに保存された公開集計です。個別回答・個人スコアは保存せず、コース別の結果数だけを表示します。
+                    </p>
+                </div>
+                <div class="stats-toolbar">
+                    <button class="btn" onclick="renderPublicStats()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem;">REFRESH</button>
+                    <button class="btn" onclick="hidePublicStats()" style="padding: 0.5rem 1.5rem; font-size: 0.9rem; border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
+                </div>
+                <div id="public-stats-list">
+                    <div class="stats-loading">読み込み待機中...</div>
+                </div>
             </div>
         </div>
 
@@ -1303,20 +2291,62 @@
                     </div>
                 </div>
 
+
+                <!-- Section 1.5: Advance Axes -->
+                <div class="db-section">
+                    <h2 class="db-h2">1.5. Advanceの補助4観点</h2>
+                    <p style="font-size:0.88rem; color:var(--color-dim); line-height:1.8; margin-bottom:1rem;">AdvanceではA〜DをMain Ideology、E〜HをAdvance Axisとして扱います。A〜Dは「何を理想とするか」、E〜Hは「その理想をどう運用するか」を見る補助軸です。</p>
+                    <div class="db-grid">
+                        <div class="db-card" style="border-left-color: var(--color-e);">
+                            <h3 style="color: var(--color-e);">【E】 境界固定主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 境界、所属、資格、責任<br>
+                                <strong>動機:</strong> 何を守るのか、誰が内側なのかを明確にしたい。<br>
+                                <strong>特徴:</strong> 共同体・権限・領域の線引きを重視する。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-f);">
+                            <h3 style="color: var(--color-f);">【F】 境界流動主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 越境、混合、接続、変化<br>
+                                <strong>動機:</strong> 固定された所属や役割から自由になりたい。<br>
+                                <strong>特徴:</strong> 異なるものが混ざることで生まれる可能性を重視する。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-g);">
+                            <h3 style="color: var(--color-g);">【G】 即応介入主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 介入、決断、速度、実行<br>
+                                <strong>動機:</strong> 問題が広がる前に、すぐ動いて被害を止めたい。<br>
+                                <strong>特徴:</strong> 長い議論よりも、実行と修正を優先する。
+                            </p>
+                        </div>
+                        <div class="db-card" style="border-left-color: var(--color-h);">
+                            <h3 style="color: var(--color-h);">【H】 観測保留主義</h3>
+                            <p style="font-size: 0.9rem; line-height: 1.6; margin-top:0.5rem;">
+                                <strong>核心:</strong> 観測、保留、非介入、熟成<br>
+                                <strong>動機:</strong> すぐ動かず、状況が自然に見えてくる時間を残したい。<br>
+                                <strong>特徴:</strong> 強い介入よりも、経過観察と当事者の選択を尊重する。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Section 2: Logic -->
                 <div class="db-section">
                     <h2 class="db-h2">2. 判定ロジック</h2>
                     <div style="font-size: 0.9rem; line-height: 1.8;">
-                        <p><strong>採点方式:</strong> 全て加点方式です。「そう思わない」と回答した場合、対立する思想（A⇔B, C⇔D）に加点されます。</p>
+                        <p><strong>採点方式:</strong> 全て加点方式です。「そう思わない」と回答した場合、対立する思想（A⇔B, C⇔D、AdvanceではE⇔F, G⇔H）に加点されます。</p>
                         <p><strong>表示スコア:</strong> 結果画面のA/B/C/D%は、各思想の理論上満点に対する達成率です。問題数が違うコースでも比較しやすいよう、0〜100%で表示します。</p>
-                        <p><strong>STANDARD:</strong> 25問の素点をそのまま比較します。中立・複合判定は広めで、直感的な傾向を出します。</p>
-                        <p><strong>LIGHT PRECISION:</strong> 50問の結果を各思想の理論上満点に対する割合へ補正して比較します。問題タイプの偏りに強く、細かい差を拾います。</p>
-                        <p><strong>HEAVY PRECISION:</strong> 100問の割合補正に加えて、対立軸（A⇔B, C⇔D）でどれだけ優勢かを評価します。矛盾回答の影響を抑え、より厳密に判定します。</p>
+                        <p><strong>STANDARD:</strong> 24問、A/B/C/Dを各6問ずつ出題します。固定バランス抽出で、直感的な傾向を出します。</p>
+                        <p><strong>LIGHT PRECISION:</strong> 48問、A/B/C/Dを各12問ずつ出題します。固定バランス抽出で、問題タイプの偏りを抑えて比較します。</p>
+                        <p><strong>MEDIUM PRECISION:</strong> 72問、A/B/C/Dを各18問ずつ出題します。Lightよりも安定した精密判定を行います。</p>
+                        <p><strong>HEAVY PRECISION:</strong> 100問、A/B/C/Dを各25問ずつ出題します。固定バランス抽出で、対立軸（A⇔B, C⇔D）の優勢度も評価します。</p>
                         <p><strong>MAX PRECISION:</strong> 200問すべてを使用し、A/B/C/Dを各50問に揃えた全問バランス補正で判定します。最も時間がかかる代わりに、ブレを最小化した最精密モードです。</p>
-                        <p><strong>100問/200問の内部評価:</strong> 表示スコアだけでなく、対立軸の優勢度も加味します。内部評価は「表示スコア×0.65 + 対立思想との差分×0.35」で計算します。例：A内部値 = A%×0.65 + max(0, A%−B%)×0.35。</p>
-                        <p><strong>精密限定判定:</strong> 50問以上では、中立連打の「∅」、高均衡の「N+」、低反応均衡の「N-」、極限単独の「++」、1思想だけ低い「!」、高密度複合の「#」を既存判定より先に評価します。</p>
+                        <p><strong>Heavy/Maxの内部評価:</strong> 表示スコアだけでなく、対立軸の優勢度も加味します。内部評価は「表示スコア×0.65 + 対立思想との差分×0.35」で計算します。例：A内部値 = A%×0.65 + max(0, A%−B%)×0.35。</p>
+                        <p><strong>精密限定判定:</strong> Light Precision以上では、中立連打の「∅」、高均衡の「N+」、低反応均衡の「N-」、極限単独の「++」、1思想だけ低い「!」、高密度複合の「#」を既存判定より先に評価します。</p>
                         <div class="logic-detail-box">
-                            <h3>精密限定判定の数値条件 / 50問以上限定</h3>
+                            <h3>精密限定判定の数値条件 / Light Precision以上限定</h3>
                             <ul>
                                 <li><strong>∅ 空白応答型:</strong> 中立回答率が72%以上。または、中立回答率62%以上かつ有効回答率38%以下。</li>
                                 <li><strong>N+ 完全均衡観測者:</strong> A/B/C/Dの標準偏差が4.2以下、平均スコア42%以上、中立回答率35%以下。</li>
@@ -1326,6 +2356,31 @@
                                 <li><strong>AB# / AC# / AD# / BC# / BD# / CD#:</strong> 1位42%以上、2位42%以上、1位と2位の差6%以下、2位と3位の差7%以上。</li>
                             </ul>
                             <p class="logic-note">判定優先順位は「∅ → N+/N- → ++ → ! → # → 既存判定」です。先に条件を満たした結果が優先されます。</p>
+                        </div>
+                        <div class="logic-detail-box">
+                            <h3>Advance判定ロジック / A〜H 8観点診断</h3>
+                            <ul>
+                                <li><strong>Advanceの設問数:</strong> A〜Hの全観点を同じ設問数で出題します。40問は各5問、96問は各12問、144問は各18問、200問は各25問、400問は各50問です。</li>
+                                <li><strong>採点ペア:</strong> A⇔B、C⇔D、E⇔F、G⇔Hで対立します。賛成はその設問タイプへ加点、反対は対立タイプへ加点、中立は加点なしです。</li>
+                                <li><strong>Main Ideology:</strong> A/B/C/Dだけを使って主結果を判定します。通常診断と同じく、Light Precision以上では∅、N+/N-、++、!、#を優先し、その後に通常結果を判定します。</li>
+                                <li><strong>Advance Axis:</strong> E/F/G/Hだけを使って補助結果を判定します。Main Ideologyとは別枠で、結果は「Main / Adv」の形で表示します。</li>
+                                <li><strong>表示スコア:</strong> A〜Hの濃度は、各観点の理論上満点に対する達成率です。これは合計100%になる割合ではありません。</li>
+                                <li><strong>構成比グラフ:</strong> Graph 1はA/B/C/D内、Graph 2はE/F/G/H内で合計100%になるよう再計算した構成比を表示します。</li>
+                                <li><strong>レーダーチャート:</strong> A〜H全体のレーダーチャートは構成比ではなく、各観点の濃度を使います。各軸がどれだけ強いかを見るためのグラフです。</li>
+                            </ul>
+                            <p class="logic-note">Advanceでは、A〜Dを「何を理想とするか」、E〜Hを「その理想をどう運用するか」として分けて扱います。</p>
+                        </div>
+                        <div class="logic-detail-box">
+                            <h3>Advance Axisの数値条件 / E〜H補助結果</h3>
+                            <ul>
+                                <li><strong>N 補助軸中立:</strong> 中立回答率72%以上。または、E/F/G/Hの標準偏差が5.0未満かつ平均スコア28%未満。</li>
+                                <li><strong>E++ / F++ / G++ / H++:</strong> トップ補助軸72%以上、対立補助軸12%以下、トップと2位の差18%以上。</li>
+                                <li><strong>EG / EH / FG / FH:</strong> 1位42%以上、2位42%以上、1位と2位の差8%以下、2位と3位の差6%以上。境界軸と実行軸が組み合わさる通常の補助複合です。</li>
+                                <li><strong>EF / GH:</strong> 上と同じ複合条件を満たした場合に出る対立軸の矛盾型です。EFは境界固定と境界流動、GHは即応介入と観測保留が同時に高い状態です。</li>
+                                <li><strong>近接複合:</strong> 上位2軸がともに35%以上、かつ差が6%以下の場合、該当する補助複合が存在すれば複合型として扱います。</li>
+                                <li><strong>単独補助型:</strong> 上の条件に当てはまらない場合、最も高いE/F/G/Hを補助結果にします。ただしトップが58%以上の場合は、その軸の強い単独傾向として++表記を使います。</li>
+                            </ul>
+                            <p class="logic-note">Advance Axisの判定優先順位は「N → 厳密++ → 厳密複合/矛盾 → 近接複合 → 単独補助型」です。</p>
                         </div>
                         <p><strong>単独判定 (+/-):</strong> 1つの思想が突出している場合、コースごとの熱狂判定ラインを超えると「+」、未満なら「-」になります。</p>
                     </div>
@@ -1407,6 +2462,24 @@
                     <div class="legend" id="result-legend">
                         <!-- JS renders here -->
                     </div>
+                    <div id="advance-visuals" class="advance-visuals">
+                        <div class="mini-chart-grid">
+                            <div class="mini-chart-card">
+                                <div class="mini-chart-title">GRAPH 1 / MAIN IDEOLOGY</div>
+                                <div id="main-mini-pie" class="mini-pie" data-code="A-D"></div>
+                                <div id="main-mini-legend" class="advance-legend"></div>
+                            </div>
+                            <div class="mini-chart-card">
+                                <div class="mini-chart-title">GRAPH 2 / ADVANCE AXIS</div>
+                                <div id="advance-mini-pie" class="mini-pie" data-code="E-H"></div>
+                                <div id="advance-mini-legend" class="advance-legend"></div>
+                            </div>
+                            <div class="mini-chart-card">
+                                <div class="mini-chart-title">GRAPH 3 / A〜H RADAR</div>
+                                <div class="radar-wrap"><svg id="radar-chart" width="260" height="260" viewBox="0 0 260 260" role="img" aria-label="A〜H 全体レーダーチャート"></svg></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Text Area -->
@@ -1415,12 +2488,14 @@
                     <div id="result-title" style="font-size: 1.4rem; font-weight: bold; margin-bottom: 0.5rem;">分析中...</div>
                     <div id="result-quote" style="font-style: italic; color: #888; margin-bottom: 1rem; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">...</div>
                     <div id="result-desc" style="font-size: 0.95rem; line-height: 1.8;">...</div>
+                    <div id="advance-result-box" class="advance-result-box" style="display:none;"></div>
                     
                     <div style="margin-top: 2rem; text-align: center; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
                         <button class="btn" onclick="restartQuiz()" style="padding: 0.5rem 2rem; font-size: 1rem;">RESET</button>
                         <button class="btn btn-share" onclick="shareOnTwitter()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE (X)</button>
-                        <button class="btn btn-hashtag" onclick="openHashtagResults()" style="padding: 0.5rem 2rem; font-size: 1rem;">他の人の結果を見る</button>
+                        <button class="btn btn-hashtag" onclick="openHashtagResults()" style="padding: 0.5rem 2rem; font-size: 1rem;">Xで他の人の結果を見る</button>
                         <button class="btn btn-history" onclick="renderHistory(); switchScreen(resultScreen, historyScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">HISTORY</button>
+                        <button class="btn btn-stats" onclick="renderPublicStats(); switchScreen(resultScreen, publicStatsScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">PUBLIC STATS</button>
                     </div>
                     <div class="author-link-box">
                         AUTHOR SITE: <a href="https://metalepsis-delta.com" target="_blank" rel="noopener noreferrer">metalepsis-delta.com</a>
@@ -1648,6 +2723,212 @@
 
     ];
 
+
+
+    // --- Advance Question Pool (E/F/G/H, 50 each) ---
+    const advanceQuestionPool = [
+        { t: "共同体を守るには、内側と外側の境界を明確にする必要がある。", type: "E", s: "境界" },
+        { t: "誰が責任を持つ範囲なのかを曖昧にすると、組織は混乱する。", type: "E", s: "所属" },
+        { t: "所属や資格を確認する仕組みは、排除ではなく安全のために必要だ。", type: "E", s: "資格" },
+        { t: "開かれた場であっても、中心に近づく人には厳しい条件が必要だ。", type: "E", s: "領域" },
+        { t: "境界線のない優しさは、守るべき人まで危険にさらすことがある。", type: "E", s: "責任" },
+        { t: "文化や制度には、外から触れてよい部分と触れてはいけない部分がある。", type: "E", s: "中枢" },
+        { t: "誰でも同じ権限を持てる仕組みは、責任の所在を薄めてしまう。", type: "E", s: "保護" },
+        { t: "場の秩序を保つには、参加者に共通の作法を求めるべきだ。", type: "E", s: "作法" },
+        { t: "自由な出入りよりも、信頼できる範囲を守る方が安心できる。", type: "E", s: "内外" },
+        { t: "境界を壊す前に、その境界が何を守っていたのか考えるべきだ。", type: "E", s: "権限" },
+        { t: "境界を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "境界" },
+        { t: "境界を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "所属" },
+        { t: "大切な場ほど、境界に関する基準を明文化すべきだ。", type: "E", s: "資格" },
+        { t: "信頼できる関係には、まず境界の確認が必要だ。", type: "E", s: "領域" },
+        { t: "所属を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "責任" },
+        { t: "所属を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "中枢" },
+        { t: "大切な場ほど、所属に関する基準を明文化すべきだ。", type: "E", s: "保護" },
+        { t: "信頼できる関係には、まず所属の確認が必要だ。", type: "E", s: "作法" },
+        { t: "資格を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "内外" },
+        { t: "資格を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "権限" },
+        { t: "大切な場ほど、資格に関する基準を明文化すべきだ。", type: "E", s: "境界" },
+        { t: "信頼できる関係には、まず資格の確認が必要だ。", type: "E", s: "所属" },
+        { t: "領域を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "資格" },
+        { t: "領域を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "領域" },
+        { t: "大切な場ほど、領域に関する基準を明文化すべきだ。", type: "E", s: "責任" },
+        { t: "信頼できる関係には、まず領域の確認が必要だ。", type: "E", s: "中枢" },
+        { t: "責任を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "保護" },
+        { t: "責任を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "作法" },
+        { t: "大切な場ほど、責任に関する基準を明文化すべきだ。", type: "E", s: "内外" },
+        { t: "信頼できる関係には、まず責任の確認が必要だ。", type: "E", s: "権限" },
+        { t: "中枢を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "境界" },
+        { t: "中枢を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "所属" },
+        { t: "大切な場ほど、中枢に関する基準を明文化すべきだ。", type: "E", s: "資格" },
+        { t: "信頼できる関係には、まず中枢の確認が必要だ。", type: "E", s: "領域" },
+        { t: "保護を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "責任" },
+        { t: "保護を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "中枢" },
+        { t: "大切な場ほど、保護に関する基準を明文化すべきだ。", type: "E", s: "保護" },
+        { t: "信頼できる関係には、まず保護の確認が必要だ。", type: "E", s: "作法" },
+        { t: "作法を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "内外" },
+        { t: "作法を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "権限" },
+        { t: "大切な場ほど、作法に関する基準を明文化すべきだ。", type: "E", s: "境界" },
+        { t: "信頼できる関係には、まず作法の確認が必要だ。", type: "E", s: "所属" },
+        { t: "内外を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "資格" },
+        { t: "内外を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "領域" },
+        { t: "大切な場ほど、内外に関する基準を明文化すべきだ。", type: "E", s: "責任" },
+        { t: "信頼できる関係には、まず内外の確認が必要だ。", type: "E", s: "中枢" },
+        { t: "権限を曖昧にすると、守るべきものまで危険にさらされる。", type: "E", s: "保護" },
+        { t: "権限を定めることは、自由を壊すのではなく責任を明確にすることだ。", type: "E", s: "作法" },
+        { t: "大切な場ほど、権限に関する基準を明文化すべきだ。", type: "E", s: "内外" },
+        { t: "信頼できる関係には、まず権限の確認が必要だ。", type: "E", s: "権限" },
+        { t: "人は一つの所属や役割に縛られず、状況に応じて変わってよい。", type: "F", s: "越境" },
+        { t: "異なる文化や思想が混ざることで、新しい可能性が生まれる。", type: "F", s: "混合" },
+        { t: "境界線は守るものではなく、必要に応じて引き直すものだ。", type: "F", s: "移動" },
+        { t: "外部から来た価値観こそ、停滞した場を動かす力になる。", type: "F", s: "接続" },
+        { t: "固定された身分や肩書きより、移動し続ける関係の方が自然だ。", type: "F", s: "開放" },
+        { t: "どこまでが内側でどこからが外側かは、時代によって変わってよい。", type: "F", s: "交差" },
+        { t: "純粋さを守るより、混ざり合うことで生まれる変化を重視したい。", type: "F", s: "流動" },
+        { t: "ルールに合わない存在でも、場そのものを変えるきっかけになり得る。", type: "F", s: "変化" },
+        { t: "境界を越える経験が、人や社会の視野を広げる。", type: "F", s: "外部" },
+        { t: "閉じた共同体より、出入りの多い流動的な場に魅力を感じる。", type: "F", s: "融合" },
+        { t: "越境を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "越境" },
+        { t: "固定された分類より、越境によって生まれる関係を重視したい。", type: "F", s: "混合" },
+        { t: "閉じた仕組みは、越境によって更新されるべきだ。", type: "F", s: "移動" },
+        { t: "人の可能性は、越境を許すほど広がっていく。", type: "F", s: "接続" },
+        { t: "混合を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "開放" },
+        { t: "固定された分類より、混合によって生まれる関係を重視したい。", type: "F", s: "交差" },
+        { t: "閉じた仕組みは、混合によって更新されるべきだ。", type: "F", s: "流動" },
+        { t: "人の可能性は、混合を許すほど広がっていく。", type: "F", s: "変化" },
+        { t: "移動を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "外部" },
+        { t: "固定された分類より、移動によって生まれる関係を重視したい。", type: "F", s: "融合" },
+        { t: "閉じた仕組みは、移動によって更新されるべきだ。", type: "F", s: "越境" },
+        { t: "人の可能性は、移動を許すほど広がっていく。", type: "F", s: "混合" },
+        { t: "接続を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "移動" },
+        { t: "固定された分類より、接続によって生まれる関係を重視したい。", type: "F", s: "接続" },
+        { t: "閉じた仕組みは、接続によって更新されるべきだ。", type: "F", s: "開放" },
+        { t: "人の可能性は、接続を許すほど広がっていく。", type: "F", s: "交差" },
+        { t: "開放を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "流動" },
+        { t: "固定された分類より、開放によって生まれる関係を重視したい。", type: "F", s: "変化" },
+        { t: "閉じた仕組みは、開放によって更新されるべきだ。", type: "F", s: "外部" },
+        { t: "人の可能性は、開放を許すほど広がっていく。", type: "F", s: "融合" },
+        { t: "交差を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "越境" },
+        { t: "固定された分類より、交差によって生まれる関係を重視したい。", type: "F", s: "混合" },
+        { t: "閉じた仕組みは、交差によって更新されるべきだ。", type: "F", s: "移動" },
+        { t: "人の可能性は、交差を許すほど広がっていく。", type: "F", s: "接続" },
+        { t: "流動を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "開放" },
+        { t: "固定された分類より、流動によって生まれる関係を重視したい。", type: "F", s: "交差" },
+        { t: "閉じた仕組みは、流動によって更新されるべきだ。", type: "F", s: "流動" },
+        { t: "人の可能性は、流動を許すほど広がっていく。", type: "F", s: "変化" },
+        { t: "変化を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "外部" },
+        { t: "固定された分類より、変化によって生まれる関係を重視したい。", type: "F", s: "融合" },
+        { t: "閉じた仕組みは、変化によって更新されるべきだ。", type: "F", s: "越境" },
+        { t: "人の可能性は、変化を許すほど広がっていく。", type: "F", s: "混合" },
+        { t: "外部を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "移動" },
+        { t: "固定された分類より、外部によって生まれる関係を重視したい。", type: "F", s: "接続" },
+        { t: "閉じた仕組みは、外部によって更新されるべきだ。", type: "F", s: "開放" },
+        { t: "人の可能性は、外部を許すほど広がっていく。", type: "F", s: "交差" },
+        { t: "融合を恐れず受け入れることで、社会は新しい形へ変化できる。", type: "F", s: "流動" },
+        { t: "固定された分類より、融合によって生まれる関係を重視したい。", type: "F", s: "変化" },
+        { t: "閉じた仕組みは、融合によって更新されるべきだ。", type: "F", s: "外部" },
+        { t: "人の可能性は、融合を許すほど広がっていく。", type: "F", s: "融合" },
+        { t: "被害が広がる前に、多少強引でも介入するべきだ。", type: "G", s: "介入" },
+        { t: "緊急時には、合意形成よりも実行速度を優先すべきだ。", type: "G", s: "決断" },
+        { t: "問題を見つけたなら、観察だけでなくすぐに手を打つ必要がある。", type: "G", s: "速度" },
+        { t: "判断が遅れたことで失われるものは、慎重さで得るものより大きい。", type: "G", s: "実行" },
+        { t: "危険な状況では、当事者の判断を待たずに止めるべき場面がある。", type: "G", s: "緊急" },
+        { t: "不完全な計画でも、動きながら修正する方がよい。", type: "G", s: "処置" },
+        { t: "社会問題は、長い議論よりもまず試験的に介入して結果を見るべきだ。", type: "G", s: "制圧" },
+        { t: "責任ある立場の人は、迷っている時間にも責任を負うべきだ。", type: "G", s: "救出" },
+        { t: "問題の芽は、小さいうちに処理した方が被害は少ない。", type: "G", s: "試行" },
+        { t: "誰かが傷ついているなら、外野であっても行動する理由になる。", type: "G", s: "行動" },
+        { t: "介入が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "介入" },
+        { t: "迷い続けるより、不完全でも介入してから修正する方がよい。", type: "G", s: "決断" },
+        { t: "危険が見えたなら、早い介入こそが責任ある態度だ。", type: "G", s: "速度" },
+        { t: "現実を変えるには、観測より介入が必要になる瞬間がある。", type: "G", s: "実行" },
+        { t: "決断が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "緊急" },
+        { t: "迷い続けるより、不完全でも決断してから修正する方がよい。", type: "G", s: "処置" },
+        { t: "危険が見えたなら、早い決断こそが責任ある態度だ。", type: "G", s: "制圧" },
+        { t: "現実を変えるには、観測より決断が必要になる瞬間がある。", type: "G", s: "救出" },
+        { t: "速度が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "試行" },
+        { t: "迷い続けるより、不完全でも速度してから修正する方がよい。", type: "G", s: "行動" },
+        { t: "危険が見えたなら、早い速度こそが責任ある態度だ。", type: "G", s: "介入" },
+        { t: "現実を変えるには、観測より速度が必要になる瞬間がある。", type: "G", s: "決断" },
+        { t: "実行が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "速度" },
+        { t: "迷い続けるより、不完全でも実行してから修正する方がよい。", type: "G", s: "実行" },
+        { t: "危険が見えたなら、早い実行こそが責任ある態度だ。", type: "G", s: "緊急" },
+        { t: "現実を変えるには、観測より実行が必要になる瞬間がある。", type: "G", s: "処置" },
+        { t: "緊急が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "制圧" },
+        { t: "迷い続けるより、不完全でも緊急してから修正する方がよい。", type: "G", s: "救出" },
+        { t: "危険が見えたなら、早い緊急こそが責任ある態度だ。", type: "G", s: "試行" },
+        { t: "現実を変えるには、観測より緊急が必要になる瞬間がある。", type: "G", s: "行動" },
+        { t: "処置が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "介入" },
+        { t: "迷い続けるより、不完全でも処置してから修正する方がよい。", type: "G", s: "決断" },
+        { t: "危険が見えたなら、早い処置こそが責任ある態度だ。", type: "G", s: "速度" },
+        { t: "現実を変えるには、観測より処置が必要になる瞬間がある。", type: "G", s: "実行" },
+        { t: "制圧が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "緊急" },
+        { t: "迷い続けるより、不完全でも制圧してから修正する方がよい。", type: "G", s: "処置" },
+        { t: "危険が見えたなら、早い制圧こそが責任ある態度だ。", type: "G", s: "制圧" },
+        { t: "現実を変えるには、観測より制圧が必要になる瞬間がある。", type: "G", s: "救出" },
+        { t: "救出が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "試行" },
+        { t: "迷い続けるより、不完全でも救出してから修正する方がよい。", type: "G", s: "行動" },
+        { t: "危険が見えたなら、早い救出こそが責任ある態度だ。", type: "G", s: "介入" },
+        { t: "現実を変えるには、観測より救出が必要になる瞬間がある。", type: "G", s: "決断" },
+        { t: "試行が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "速度" },
+        { t: "迷い続けるより、不完全でも試行してから修正する方がよい。", type: "G", s: "実行" },
+        { t: "危険が見えたなら、早い試行こそが責任ある態度だ。", type: "G", s: "緊急" },
+        { t: "現実を変えるには、観測より試行が必要になる瞬間がある。", type: "G", s: "処置" },
+        { t: "行動が必要な場面では、完璧な合意を待つべきではない。", type: "G", s: "制圧" },
+        { t: "迷い続けるより、不完全でも行動してから修正する方がよい。", type: "G", s: "救出" },
+        { t: "危険が見えたなら、早い行動こそが責任ある態度だ。", type: "G", s: "試行" },
+        { t: "現実を変えるには、観測より行動が必要になる瞬間がある。", type: "G", s: "行動" },
+        { t: "問題が起きても、すぐに介入するより経過を見るべき場面が多い。", type: "H", s: "観測" },
+        { t: "人や社会には、外から変えられる前に自分で変わる時間が必要だ。", type: "H", s: "保留" },
+        { t: "急いだ解決は、見えていない副作用を生むことがある。", type: "H", s: "熟成" },
+        { t: "十分な観測なしに手を出すことは、善意でも危険になり得る。", type: "H", s: "非介入" },
+        { t: "動かないことも、状況を壊さないための重要な判断だ。", type: "H", s: "距離" },
+        { t: "問題の原因が見えるまで、強い処置は避けるべきだ。", type: "H", s: "検討" },
+        { t: "当事者が自分で選ぶ余地を残すために、外部の介入は控えめでよい。", type: "H", s: "自然推移" },
+        { t: "短期的な改善より、長い時間をかけた自然な変化を重視したい。", type: "H", s: "余白" },
+        { t: "すぐに結論を出さず、複数の可能性を保留する姿勢が必要だ。", type: "H", s: "待機" },
+        { t: "観測し続けることでしか見えない真実がある。", type: "H", s: "静観" },
+        { t: "観測の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "観測" },
+        { t: "すぐに結論を出すより、観測によって状況を理解したい。", type: "H", s: "保留" },
+        { t: "外から動かす前に、観測を尊重すべき場面がある。", type: "H", s: "熟成" },
+        { t: "強い介入より、観測が結果的に人を守ることがある。", type: "H", s: "非介入" },
+        { t: "保留の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "距離" },
+        { t: "すぐに結論を出すより、保留によって状況を理解したい。", type: "H", s: "検討" },
+        { t: "外から動かす前に、保留を尊重すべき場面がある。", type: "H", s: "自然推移" },
+        { t: "強い介入より、保留が結果的に人を守ることがある。", type: "H", s: "余白" },
+        { t: "熟成の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "待機" },
+        { t: "すぐに結論を出すより、熟成によって状況を理解したい。", type: "H", s: "静観" },
+        { t: "外から動かす前に、熟成を尊重すべき場面がある。", type: "H", s: "観測" },
+        { t: "強い介入より、熟成が結果的に人を守ることがある。", type: "H", s: "保留" },
+        { t: "非介入の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "熟成" },
+        { t: "すぐに結論を出すより、非介入によって状況を理解したい。", type: "H", s: "非介入" },
+        { t: "外から動かす前に、非介入を尊重すべき場面がある。", type: "H", s: "距離" },
+        { t: "強い介入より、非介入が結果的に人を守ることがある。", type: "H", s: "検討" },
+        { t: "距離の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "自然推移" },
+        { t: "すぐに結論を出すより、距離によって状況を理解したい。", type: "H", s: "余白" },
+        { t: "外から動かす前に、距離を尊重すべき場面がある。", type: "H", s: "待機" },
+        { t: "強い介入より、距離が結果的に人を守ることがある。", type: "H", s: "静観" },
+        { t: "検討の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "観測" },
+        { t: "すぐに結論を出すより、検討によって状況を理解したい。", type: "H", s: "保留" },
+        { t: "外から動かす前に、検討を尊重すべき場面がある。", type: "H", s: "熟成" },
+        { t: "強い介入より、検討が結果的に人を守ることがある。", type: "H", s: "非介入" },
+        { t: "自然推移の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "距離" },
+        { t: "すぐに結論を出すより、自然推移によって状況を理解したい。", type: "H", s: "検討" },
+        { t: "外から動かす前に、自然推移を尊重すべき場面がある。", type: "H", s: "自然推移" },
+        { t: "強い介入より、自然推移が結果的に人を守ることがある。", type: "H", s: "余白" },
+        { t: "余白の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "待機" },
+        { t: "すぐに結論を出すより、余白によって状況を理解したい。", type: "H", s: "静観" },
+        { t: "外から動かす前に、余白を尊重すべき場面がある。", type: "H", s: "観測" },
+        { t: "強い介入より、余白が結果的に人を守ることがある。", type: "H", s: "保留" },
+        { t: "待機の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "熟成" },
+        { t: "すぐに結論を出すより、待機によって状況を理解したい。", type: "H", s: "非介入" },
+        { t: "外から動かす前に、待機を尊重すべき場面がある。", type: "H", s: "距離" },
+        { t: "強い介入より、待機が結果的に人を守ることがある。", type: "H", s: "検討" },
+        { t: "静観の時間を置くことで、見誤った判断を避けられる。", type: "H", s: "自然推移" },
+        { t: "すぐに結論を出すより、静観によって状況を理解したい。", type: "H", s: "余白" },
+        { t: "外から動かす前に、静観を尊重すべき場面がある。", type: "H", s: "待機" },
+        { t: "強い介入より、静観が結果的に人を守ることがある。", type: "H", s: "静観" }
+    ];
+
     // --- Results Data ---
     const resultsData = {
         // --- Plus Types (Fanatic) ---
@@ -1701,53 +2982,90 @@
         NEUTRAL: { title: "[N] 中立主義的思考 (The Observer)", quote: "「世界の天秤を眺める観測者」", desc: "どの思想にも理解を示し、同時に距離を置いています。バランサーとして機能しますが、決断を下せず時代の波に流されるだけの存在になる危険性もあります。", color: "#ffffff" }
     };
 
+    // --- Advance Axis Results Data ---
+    const advanceResultsData = {
+        E: { title: "[E] 境界固定型", quote: "「線を引くことは、守ることでもある。」", desc: "所属・責任・内外の線引きを重視する補助軸です。主思想が何であっても、運用では範囲や資格を明確にしたがります。", color: "#ffb020" },
+        F: { title: "[F] 境界流動型", quote: "「境界は越えるためにも存在する。」", desc: "混合・移動・接続を重視する補助軸です。固定された役割や所属より、状況に応じて変わる関係を好みます。", color: "#c084fc" },
+        G: { title: "[G] 即応介入型", quote: "「見えた問題には、今すぐ手を伸ばす。」", desc: "速度・実行・介入を重視する補助軸です。長い議論よりも、被害が広がる前に行動することを選びやすいタイプです。", color: "#f97316" },
+        H: { title: "[H] 観測保留型", quote: "「動かないことも、判断の一つだ。」", desc: "観測・保留・非介入を重視する補助軸です。すぐに手を出すより、状況が自然に見えてくるまで待つことを好みます。", color: "#14b8a6" },
+        "E++": { title: "[E++] 絶対境界型", quote: "「ここから先は、選ばれた者だけが入れる。」", desc: "境界固定が極端に強く、対立する流動性がほとんどありません。共同体・権限・資格の線引きを非常に強く求めます。", color: "#ffb020" },
+        "F++": { title: "[F++] 完全越境型", quote: "「どこにも属さず、すべてへ接続する。」", desc: "境界流動が極端に強く、固定された線引きをほとんど求めません。所属や役割を越えて変わり続けることに強く惹かれます。", color: "#c084fc" },
+        "G++": { title: "[G++] 即時介入型", quote: "「遅れた正義は、もはや正義ではない。」", desc: "即応介入が極端に強く、観測や保留をほとんど選びません。問題を見たらただちに動く、強い実行志向です。", color: "#f97316" },
+        "H++": { title: "[H++] 完全観測型", quote: "「世界は、触れずに見つめることで姿を現す。」", desc: "観測保留が極端に強く、即時介入をほとんど選びません。動かすよりも見守ることに価値を置く、徹底した静観志向です。", color: "#14b8a6" },
+        EG: { title: "[EG] 境界介入型", quote: "「線を引き、必要ならすぐ守る。」", desc: "境界固定と即応介入が強い型です。守る範囲を明確にし、危険が見えたらすぐに処置する運用傾向です。", color: "#fb923c" },
+        EH: { title: "[EH] 境界保留型", quote: "「線は引く。ただし、動く前に観測する。」", desc: "境界固定と観測保留が強い型です。内外の区別は重視しますが、介入には慎重で、時間をかけて判断します。", color: "#fbbf24" },
+        FG: { title: "[FG] 流動介入型", quote: "「境界を越え、ただちに変える。」", desc: "境界流動と即応介入が強い型です。固定された枠を越えながら、現実へすばやく手を入れる変革志向です。", color: "#d946ef" },
+        FH: { title: "[FH] 流動観測型", quote: "「流れを止めず、変化を見届ける。」", desc: "境界流動と観測保留が強い型です。混ざり合う変化を受け入れつつ、強制的には動かさない柔らかな運用傾向です。", color: "#8b5cf6" },
+        EF: { title: "[EF] 境界矛盾型", quote: "「線を引きたい。だが、その線を越えたい。」", desc: "境界固定と境界流動が同時に高い矛盾型です。守るべき内側を求めながら、外部との混合にも強く反応します。", color: "#eab308" },
+        GH: { title: "[GH] 介入矛盾型", quote: "「今すぐ動きたい。だが、まだ見ていたい。」", desc: "即応介入と観測保留が同時に高い矛盾型です。行動衝動と慎重な観測がぶつかりやすい補助結果です。", color: "#22c55e" },
+        N: { title: "[N] 補助軸中立", quote: "「運用方針はまだ一方向に定まっていない。」", desc: "E/F/G/Hの差が小さく、補助軸としては中立的です。主思想をどう運用するかが状況によって変わりやすいタイプです。", color: "#cfd8dc" }
+    };
+
     // --- State ---
     let activeQuestions = [];
     let answerHistory = [];
     let currentQIndex = 0;
-    let scores = { A: 0, B: 0, C: 0, D: 0 };
-    let maxPossibleScore = { A: 0, B: 0, C: 0, D: 0 };
+    const MAIN_TYPES = ['A', 'B', 'C', 'D'];
+    const ADVANCE_TYPES = ['E', 'F', 'G', 'H'];
+    const ALL_TYPES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const TYPE_LABELS = { A: '回帰淘汰', B: '共命包摂', C: '適応進転', D: '無差総質', E: '境界固定', F: '境界流動', G: '即応介入', H: '観測保留' };
+    let scores = createScoreObject(ALL_TYPES);
+    let maxPossibleScore = createScoreObject(ALL_TYPES);
     let currentMode = 'desktop';
     let currentTheme = ['light', 'dark'].includes(localStorage.getItem('mtps-theme')) ? localStorage.getItem('mtps-theme') : 'dark';
     let currentCourse = { id: 'STANDARD', label: 'STANDARD', count: 25 };
     let pendingCourseCount = null;
-    let currentQuestionSetMeta = { method: '未生成', seedLabel: '', typeCounts: { A: 0, B: 0, C: 0, D: 0 } };
+    let pendingWarningScreen = null;
+    let currentQuestionSetMeta = { method: '未生成', seedLabel: '', typeCounts: createScoreObject(ALL_TYPES, 0) };
 
     // Course-specific evaluation settings.
     // STANDARD / LIGHT use stable balanced sampling to avoid result gacha.
     // HEAVY/MAX use broad or full question sets with weight correction. MAX is balanced to A/B/C/D = 50 each.
     const quizModes = {
-        25: {
+        24: {
             id: 'STANDARD',
             label: 'STANDARD',
-            count: 25,
+            count: 24,
             selection: 'stable-balanced',
             evaluation: 'rounded-normalized',
             neutralSD: 7.5,
             hybridDiff: 10.0,
             triDiff: 7.0,
             plusLine: 0.42,
-            shareName: 'STANDARD / 25問',
+            shareName: 'STANDARD / 24問',
             selectionLabel: '固定バランス抽出'
         },
-        50: {
+        48: {
             id: 'LIGHT',
             label: 'LIGHT PRECISION',
-            count: 50,
+            count: 48,
             selection: 'stable-balanced',
             evaluation: 'normalized',
             neutralSD: 6.5,
             hybridDiff: 8.0,
             triDiff: 5.5,
             plusLine: 0.48,
-            shareName: 'LIGHT PRECISION / 50問',
+            shareName: 'LIGHT PRECISION / 48問',
+            selectionLabel: '固定バランス抽出'
+        },
+        72: {
+            id: 'MEDIUM',
+            label: 'MEDIUM PRECISION',
+            count: 72,
+            selection: 'stable-balanced',
+            evaluation: 'normalized',
+            neutralSD: 5.8,
+            hybridDiff: 7.0,
+            triDiff: 4.8,
+            plusLine: 0.52,
+            shareName: 'MEDIUM PRECISION / 72問',
             selectionLabel: '固定バランス抽出'
         },
         100: {
             id: 'HEAVY',
             label: 'HEAVY PRECISION',
             count: 100,
-            selection: 'all-weighted',
+            selection: 'stable-balanced',
             evaluation: 'pair-dominance',
             neutralSD: 5.0,
             hybridDiff: 6.0,
@@ -1768,15 +3086,88 @@
             plusLine: 0.60,
             shareName: 'MAX PRECISION / 200問',
             selectionLabel: '全問バランス補正'
+        },
+        40: {
+            id: 'ADV_STANDARD',
+            label: 'ADVANCE STANDARD',
+            count: 40,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'rounded-normalized',
+            neutralSD: 7.5,
+            hybridDiff: 10.0,
+            triDiff: 7.0,
+            plusLine: 0.42,
+            shareName: 'ADVANCE STANDARD / 40問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        96: {
+            id: 'ADV_LIGHT',
+            label: 'ADVANCE LIGHT PRECISION',
+            count: 96,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'normalized',
+            neutralSD: 6.0,
+            hybridDiff: 7.0,
+            triDiff: 5.0,
+            plusLine: 0.48,
+            shareName: 'ADVANCE LIGHT PRECISION / 96問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        144: {
+            id: 'ADV_MEDIUM',
+            label: 'ADVANCE MEDIUM PRECISION',
+            count: 144,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'normalized',
+            neutralSD: 5.5,
+            hybridDiff: 6.5,
+            triDiff: 4.5,
+            plusLine: 0.52,
+            shareName: 'ADVANCE MEDIUM PRECISION / 144問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        201: {
+            id: 'ADV_HEAVY',
+            label: 'ADVANCE HEAVY PRECISION',
+            count: 200,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 5.0,
+            hybridDiff: 6.0,
+            triDiff: 4.0,
+            plusLine: 0.55,
+            shareName: 'ADVANCE HEAVY PRECISION / 200問',
+            selectionLabel: 'A〜H固定バランス抽出'
+        },
+        400: {
+            id: 'ADV_MAX',
+            label: 'ADVANCE MAX PRECISION',
+            count: 400,
+            isAdvance: true,
+            selection: 'advance-balanced',
+            evaluation: 'pair-dominance',
+            neutralSD: 4.0,
+            hybridDiff: 4.5,
+            triDiff: 3.0,
+            plusLine: 0.60,
+            shareName: 'ADVANCE MAX PRECISION / 400問',
+            selectionLabel: 'A〜H全問バランス補正'
         }
+
     };
 
     // --- DOM Elements ---
     const deviceScreen = document.getElementById('device-screen');
     const warningScreen = document.getElementById('warning-screen');
+    const advanceMaxWarningScreen = document.getElementById('advance-max-warning-screen');
     const noticeScreen = document.getElementById('notice-screen');
     const creditScreen = document.getElementById('credit-screen');
     const historyScreen = document.getElementById('history-screen');
+    const publicStatsScreen = document.getElementById('public-stats-screen');
     const introScreen = document.getElementById('intro-screen');
     const quizScreen = document.getElementById('quiz-screen');
     const resultScreen = document.getElementById('result-screen');
@@ -1800,6 +3191,7 @@
     }
 
     applyTheme(currentTheme);
+    restoreCoursePanel();
 
     function setMode(mode) {
         currentMode = mode;
@@ -1843,20 +3235,55 @@
     }
 
 
+
+    function setCoursePanel(panel) {
+        const isAdvance = panel === 'advance';
+        const normalPanel = document.getElementById('normal-course-panel');
+        const advancePanel = document.getElementById('advance-course-panel');
+        const normalBtn = document.getElementById('normal-tab-btn');
+        const advanceBtn = document.getElementById('advance-tab-btn');
+
+        if (normalPanel && advancePanel) {
+            normalPanel.classList.toggle('active', !isAdvance);
+            advancePanel.classList.toggle('active', isAdvance);
+        }
+        if (normalBtn && advanceBtn) {
+            normalBtn.classList.toggle('active', !isAdvance);
+            advanceBtn.classList.toggle('active', isAdvance);
+        }
+
+        try {
+            localStorage.setItem('mtps-course-panel', isAdvance ? 'advance' : 'normal');
+        } catch (e) {}
+    }
+
+    function restoreCoursePanel() {
+        let savedPanel = 'normal';
+        try {
+            savedPanel = localStorage.getItem('mtps-course-panel') === 'advance' ? 'advance' : 'normal';
+        } catch (e) {}
+        setCoursePanel(savedPanel);
+    }
+
     function showCourseWarning(count) {
         pendingCourseCount = count;
-        switchScreen(introScreen, warningScreen);
+        pendingWarningScreen = count === 400 ? advanceMaxWarningScreen : warningScreen;
+        switchScreen(introScreen, pendingWarningScreen);
     }
 
     function hideCourseWarning() {
+        const screen = pendingWarningScreen || warningScreen;
         pendingCourseCount = null;
-        switchScreen(warningScreen, introScreen);
+        pendingWarningScreen = null;
+        switchScreen(screen, introScreen);
     }
 
     function confirmCourseWarning() {
         const count = pendingCourseCount || 200;
+        const screen = pendingWarningScreen || warningScreen;
         pendingCourseCount = null;
-        startQuiz(count, warningScreen);
+        pendingWarningScreen = null;
+        startQuiz(count, screen);
     }
 
     function showMainNotice() {
@@ -1884,6 +3311,15 @@
         switchScreen(historyScreen, introScreen);
     }
 
+    function showPublicStats() {
+        renderPublicStats();
+        switchScreen(introScreen, publicStatsScreen);
+    }
+
+    function hidePublicStats() {
+        switchScreen(publicStatsScreen, introScreen);
+    }
+
     function showDatabase() {
         renderDatabaseList();
         switchScreen(introScreen, databaseScreen);
@@ -1905,7 +3341,12 @@
             precisionExtreme: { title: "精密限定：極限単独型 (++)", items: [] },
             precisionMissing: { title: "精密限定：欠落型 (!)", items: [] },
             precisionNeutral: { title: "精密限定：特殊・中立", items: [] },
-            precisionHybrid: { title: "精密限定：矛盾複合型 (#)", items: [] }
+            precisionHybrid: { title: "精密限定：矛盾複合型 (#)", items: [] },
+            advanceSingle: { title: "ADVANCE：補助軸・単独型", items: [] },
+            advanceExtreme: { title: "ADVANCE：補助軸・極限型 (++)", items: [] },
+            advanceComposite: { title: "ADVANCE：補助軸・複合型", items: [] },
+            advanceConflict: { title: "ADVANCE：補助軸・矛盾型", items: [] },
+            advanceNeutral: { title: "ADVANCE：補助軸・中立", items: [] }
         };
 
         for (const [key, data] of Object.entries(resultsData)) {
@@ -1928,7 +3369,21 @@
             }
         }
 
-        // Render STANDARD-compatible results first, then precision-only results.
+        for (const [key, data] of Object.entries(advanceResultsData)) {
+            if (['E', 'F', 'G', 'H'].includes(key)) {
+                groups.advanceSingle.items.push({key, ...data});
+            } else if (key.endsWith('++')) {
+                groups.advanceExtreme.items.push({key, ...data});
+            } else if (key === 'EF' || key === 'GH') {
+                groups.advanceConflict.items.push({key, ...data});
+            } else if (key === 'N') {
+                groups.advanceNeutral.items.push({key, ...data});
+            } else {
+                groups.advanceComposite.items.push({key, ...data});
+            }
+        }
+
+        // Render STANDARD-compatible results first, then precision-only results, then Advance Axis results.
         [
             groups.standardFanatic,
             groups.standardModerate,
@@ -1937,7 +3392,12 @@
             groups.precisionExtreme,
             groups.precisionMissing,
             groups.precisionNeutral,
-            groups.precisionHybrid
+            groups.precisionHybrid,
+            groups.advanceSingle,
+            groups.advanceExtreme,
+            groups.advanceComposite,
+            groups.advanceConflict,
+            groups.advanceNeutral
         ].forEach(group => {
             if (group.items.length === 0) return;
 
@@ -1985,8 +3445,20 @@
         'A': 'B',
         'B': 'A',
         'C': 'D',
-        'D': 'C'
+        'D': 'C',
+        'E': 'F',
+        'F': 'E',
+        'G': 'H',
+        'H': 'G'
     };
+
+    function createScoreObject(types = ALL_TYPES, initialValue = 0) {
+        return types.reduce((obj, type) => { obj[type] = initialValue; return obj; }, {});
+    }
+
+    function getActiveTypes() {
+        return currentCourse && currentCourse.isAdvance ? ALL_TYPES : MAIN_TYPES;
+    }
 
     function hashStringToSeed(str) {
         // Simple deterministic hash. Good enough for stable question ordering.
@@ -2039,17 +3511,17 @@
         return copied;
     }
 
-    function getTypeCounts(questionSet) {
-        const typeCounts = { A: 0, B: 0, C: 0, D: 0 };
+    function getTypeCounts(questionSet, types = getActiveTypes()) {
+        const typeCounts = createScoreObject(types, 0);
         questionSet.forEach(q => {
             if (typeCounts[q.type] !== undefined) typeCounts[q.type]++;
         });
         return typeCounts;
     }
 
-    function applyTypeWeights(questionSet) {
-        const typeCounts = getTypeCounts(questionSet);
-        const targetPerType = questionSet.length / 4;
+    function applyTypeWeights(questionSet, types = getActiveTypes()) {
+        const typeCounts = getTypeCounts(questionSet, types);
+        const targetPerType = questionSet.length / types.length;
 
         return questionSet.map(q => {
             const countForType = typeCounts[q.type] || 1;
@@ -2058,16 +3530,39 @@
         });
     }
 
+    function getPoolByType(type) {
+        return MAIN_TYPES.includes(type) ? questionPool : advanceQuestionPool;
+    }
+
+    function buildAdvancedQuestionSet(course) {
+        const seedInfo = getStableCourseSeed(course);
+        const rng = seededRandom(seedInfo.seed);
+        const perType = Math.floor(course.count / 8);
+        const types = ALL_TYPES;
+        let selected = [];
+
+        types.forEach(type => {
+            const pool = getPoolByType(type).filter(q => q.type === type);
+            selected = selected.concat(shuffleArray(pool, rng).slice(0, perType));
+        });
+
+        selected = applyTypeWeights(shuffleArray(selected, rng), types);
+        currentQuestionSetMeta = {
+            method: course.selectionLabel,
+            seedLabel: seedInfo.label,
+            typeCounts: getTypeCounts(selected, types)
+        };
+        return selected;
+    }
+
     function buildBalancedQuestionSet(course) {
         const count = course.count;
         const seedInfo = getStableCourseSeed(course);
         const rng = seededRandom(seedInfo.seed);
-        const types = ['A', 'B', 'C', 'D'];
+        const types = MAIN_TYPES;
         const shuffledTypes = shuffleArray(types, rng);
         const quotas = { A: Math.floor(count / 4), B: Math.floor(count / 4), C: Math.floor(count / 4), D: Math.floor(count / 4) };
 
-        // Remaining 1~3 questions are assigned by seeded order.
-        // Weight correction later cancels the small numerical advantage.
         for (let i = 0; i < count % 4; i++) {
             quotas[shuffledTypes[i]]++;
         }
@@ -2087,27 +3582,31 @@
         });
 
         selected = shuffleArray(selected, rng);
-        selected = applyTypeWeights(selected);
+        selected = applyTypeWeights(selected, types);
 
         currentQuestionSetMeta = {
             method: course.selectionLabel,
             seedLabel: seedInfo.label,
-            typeCounts: getTypeCounts(selected)
+            typeCounts: getTypeCounts(selected, types)
         };
 
         return selected;
     }
 
     function buildQuestionSet(course) {
+        if (course.isAdvance) {
+            return buildAdvancedQuestionSet(course);
+        }
+
         if (course.selection === 'all-balanced' || course.count >= questionPool.length) {
             const seedInfo = getStableCourseSeed(course);
             const rng = seededRandom(seedInfo.seed);
-            const selected = applyTypeWeights(shuffleArray(questionPool, rng));
+            const selected = applyTypeWeights(shuffleArray(questionPool, rng), MAIN_TYPES);
 
             currentQuestionSetMeta = {
                 method: course.selectionLabel,
                 seedLabel: seedInfo.label,
-                typeCounts: getTypeCounts(selected)
+                typeCounts: getTypeCounts(selected, MAIN_TYPES)
             };
 
             return selected;
@@ -2117,12 +3616,12 @@
             const seedInfo = getStableCourseSeed(course);
             const rng = seededRandom(seedInfo.seed);
             const baseQuestions = questionPool.slice(0, course.count);
-            const selected = applyTypeWeights(shuffleArray(baseQuestions, rng));
+            const selected = applyTypeWeights(shuffleArray(baseQuestions, rng), MAIN_TYPES);
 
             currentQuestionSetMeta = {
                 method: course.selectionLabel,
                 seedLabel: seedInfo.label,
-                typeCounts: getTypeCounts(selected)
+                typeCounts: getTypeCounts(selected, MAIN_TYPES)
             };
 
             return selected;
@@ -2132,7 +3631,8 @@
     }
 
     function calculateMaxPossibleScores(questionSet) {
-        const weightedTypeTotals = { A: 0, B: 0, C: 0, D: 0 };
+        const types = getActiveTypes();
+        const weightedTypeTotals = createScoreObject(types, 0);
 
         questionSet.forEach(q => {
             if (weightedTypeTotals[q.type] !== undefined) {
@@ -2140,12 +3640,12 @@
             }
         });
 
-        return {
-            A: (weightedTypeTotals.A + weightedTypeTotals.B) * 2,
-            B: (weightedTypeTotals.B + weightedTypeTotals.A) * 2,
-            C: (weightedTypeTotals.C + weightedTypeTotals.D) * 2,
-            D: (weightedTypeTotals.D + weightedTypeTotals.C) * 2
-        };
+        const result = createScoreObject(types, 0);
+        types.forEach(type => {
+            const oppType = opposition[type];
+            result[type] = ((weightedTypeTotals[type] || 0) + (weightedTypeTotals[oppType] || 0)) * 2;
+        });
+        return result;
     }
 
     function formatScore(value) {
@@ -2153,14 +3653,18 @@
     }
 
     function getQuestionSetText() {
-        const c = currentQuestionSetMeta.typeCounts || { A: 0, B: 0, C: 0, D: 0 };
-        return `${currentQuestionSetMeta.method} / A:${c.A} B:${c.B} C:${c.C} D:${c.D}`;
+        const c = currentQuestionSetMeta.typeCounts || createScoreObject(getActiveTypes(), 0);
+        const activeTypes = getActiveTypes();
+        const values = activeTypes.map(t => Number(c[t] || 0));
+        const allSame = values.length > 0 && values.every(v => v === values[0]);
+        const typeText = allSame ? `ALL:${values[0]}` : activeTypes.map(t => `${t}:${c[t] || 0}`).join(' ');
+        return `${currentQuestionSetMeta.method} / ${typeText}`;
     }
 
-    function getNormalizedScores() {
-        const normalized = { A: 0, B: 0, C: 0, D: 0 };
+    function getNormalizedScores(types = getActiveTypes()) {
+        const normalized = createScoreObject(types, 0);
 
-        Object.keys(scores).forEach(type => {
+        types.forEach(type => {
             const max = maxPossibleScore[type] || 1;
             normalized[type] = (scores[type] / max) * 100;
         });
@@ -2168,27 +3672,25 @@
         return normalized;
     }
 
-    function getCompositionScores(normalized) {
-        const source = normalized || getNormalizedScores();
-        const total = ['A', 'B', 'C', 'D'].reduce((sum, type) => sum + Math.max(0, Number(source[type] || 0)), 0);
+    function getCompositionScores(normalized, types = Object.keys(normalized || getNormalizedScores())) {
+        const source = normalized || getNormalizedScores(types);
+        const total = types.reduce((sum, type) => sum + Math.max(0, Number(source[type] || 0)), 0);
 
         if (total <= 0) {
-            return { A: 0, B: 0, C: 0, D: 0 };
+            return createScoreObject(types, 0);
         }
 
-        return {
-            A: (Math.max(0, Number(source.A || 0)) / total) * 100,
-            B: (Math.max(0, Number(source.B || 0)) / total) * 100,
-            C: (Math.max(0, Number(source.C || 0)) / total) * 100,
-            D: (Math.max(0, Number(source.D || 0)) / total) * 100
-        };
+        const result = createScoreObject(types, 0);
+        types.forEach(type => {
+            result[type] = (Math.max(0, Number(source[type] || 0)) / total) * 100;
+        });
+        return result;
     }
 
     function getEvaluationScores() {
-        const normalized = getNormalizedScores();
+        const normalized = getNormalizedScores(MAIN_TYPES);
 
         if (currentCourse.evaluation === 'rounded-normalized') {
-            // STANDARD is intentionally rough: it avoids false precision by rounding to 5% steps.
             return {
                 A: Math.round(normalized.A / 5) * 5,
                 B: Math.round(normalized.B / 5) * 5,
@@ -2201,15 +3703,44 @@
             return normalized;
         }
 
-        // HEAVY / MAX PRECISION:
-        // Score itself + how much it beats its opposing ideology.
-        // This makes contradictory high scores less likely to create the same result every time.
         return {
             A: normalized.A * 0.65 + Math.max(0, normalized.A - normalized.B) * 0.35,
             B: normalized.B * 0.65 + Math.max(0, normalized.B - normalized.A) * 0.35,
             C: normalized.C * 0.65 + Math.max(0, normalized.C - normalized.D) * 0.35,
             D: normalized.D * 0.65 + Math.max(0, normalized.D - normalized.C) * 0.35
         };
+    }
+
+    function getAdvanceAxisResultKey() {
+        if (!currentCourse || !currentCourse.isAdvance) return null;
+        const normalized = getNormalizedScores(ADVANCE_TYPES);
+        const stats = getAnswerStats();
+        const values = ADVANCE_TYPES.map(t => normalized[t]);
+        const avg = mean(values);
+        const sd = standardDeviation(values);
+        if (stats.neutralRate >= 0.72 || sd < 5.0 && avg < 28) return 'N';
+
+        const sorted = [...ADVANCE_TYPES].sort((a, b) => normalized[b] - normalized[a]);
+        const top = sorted[0], second = sorted[1], third = sorted[2];
+        const topScore = normalized[top], secondScore = normalized[second], thirdScore = normalized[third];
+        const oppositeScore = normalized[opposition[top]] || 0;
+
+        if (topScore >= 72 && oppositeScore <= 12 && (topScore - secondScore) >= 18) {
+            const key = `${top}++`;
+            if (advanceResultsData[key]) return key;
+        }
+
+        const pairKey = [top, second].sort().join('');
+        if (advanceResultsData[pairKey] && topScore >= 42 && secondScore >= 42 && (topScore - secondScore) <= 8 && (secondScore - thirdScore) >= 6) {
+            return pairKey;
+        }
+
+        if (topScore - secondScore <= 6 && topScore >= 35 && secondScore >= 35) {
+            const maybePair = [top, second].sort().join('');
+            if (advanceResultsData[maybePair]) return maybePair;
+        }
+
+        return topScore >= 58 && advanceResultsData[`${top}++`] ? `${top}++` : top;
     }
 
     function standardDeviation(values) {
@@ -2240,11 +3771,11 @@
     }
 
     function getSpecialResultKey() {
-        // 50問以上の精密コースだけで発動。STANDARDでは既存判定のみを使う。
-        if (!currentCourse || currentCourse.count < 50) return null;
+        // Light Precision以上の精密コースだけで発動。STANDARDでは既存判定のみを使う。
+        if (!currentCourse || currentCourse.count < 48) return null;
 
         const normalized = getNormalizedScores();
-        const types = ['A', 'B', 'C', 'D'];
+        const types = [...MAIN_TYPES];
         const values = types.map(t => normalized[t]);
         const avg = mean(values);
         const sd = standardDeviation(values);
@@ -2264,7 +3795,7 @@
             return 'N-';
         }
 
-        const sorted = types.sort((a, b) => {
+        const sorted = [...types].sort((a, b) => {
             const diff = normalized[b] - normalized[a];
             if (Math.abs(diff) > 0.0001) return diff;
             return scores[b] - scores[a];
@@ -2274,7 +3805,7 @@
         const second = sorted[1];
         const third = sorted[2];
         const bottom = sorted[3];
-        const oppositeMap = { A: 'B', B: 'A', C: 'D', D: 'C' };
+        const oppositeMap = opposition;
         const topScore = normalized[top];
         const secondScore = normalized[second];
         const thirdScore = normalized[third];
@@ -2344,15 +3875,16 @@
     }
 
     function getCourseDebugText() {
-        const normalized = getNormalizedScores();
-        return `${currentCourse.shareName} / ${getQuestionSetText()} / 評価:${currentCourse.evaluation} / 補正 A:${normalized.A.toFixed(1)} B:${normalized.B.toFixed(1)} C:${normalized.C.toFixed(1)} D:${normalized.D.toFixed(1)}`;
+        const normalized = getNormalizedScores(getActiveTypes());
+        const typeText = getActiveTypes().map(t => `${t}:${normalized[t].toFixed(1)}`).join(' ');
+        return `${currentCourse.shareName} / ${getQuestionSetText()} / 評価:${currentCourse.evaluation} / 補正 ${typeText}`;
     }
 
     function startQuiz(count, fromScreen = introScreen) {
-        currentCourse = quizModes[count] || quizModes[25];
+        currentCourse = quizModes[count] || quizModes[24];
         currentQIndex = 0;
         answerHistory = [];
-        scores = { A: 0, B: 0, C: 0, D: 0 };
+        scores = createScoreObject(ALL_TYPES, 0);
 
         activeQuestions = buildQuestionSet(currentCourse);
         maxPossibleScore = calculateMaxPossibleScores(activeQuestions);
@@ -2442,6 +3974,242 @@
         return raw || fallback;
     }
 
+
+    const PUBLIC_STATS_COURSE_ORDER = [
+        'normal_standard', 'normal_light', 'normal_medium', 'normal_heavy', 'normal_max',
+        'advance_standard', 'advance_light', 'advance_medium', 'advance_heavy', 'advance_max'
+    ];
+    const PUBLIC_STATS_COURSE_META = {
+        normal_standard: { mode: 'normal', label: 'Standard', questions: 24, allPerAxis: 6 },
+        normal_light: { mode: 'normal', label: 'Light Precision', questions: 48, allPerAxis: 12 },
+        normal_medium: { mode: 'normal', label: 'Medium Precision', questions: 72, allPerAxis: 18 },
+        normal_heavy: { mode: 'normal', label: 'Heavy Precision', questions: 100, allPerAxis: 25 },
+        normal_max: { mode: 'normal', label: 'Max Precision', questions: 200, allPerAxis: 50 },
+        advance_standard: { mode: 'advance', label: 'Advance Standard', questions: 40, allPerAxis: 5 },
+        advance_light: { mode: 'advance', label: 'Advance Light Precision', questions: 96, allPerAxis: 12 },
+        advance_medium: { mode: 'advance', label: 'Advance Medium Precision', questions: 144, allPerAxis: 18 },
+        advance_heavy: { mode: 'advance', label: 'Advance Heavy Precision', questions: 200, allPerAxis: 25 },
+        advance_max: { mode: 'advance', label: 'Advance Max Precision', questions: 400, allPerAxis: 50 }
+    };
+    const STANDARD_MAIN_PUBLIC_RESULT_CODES = [
+        'A+','A-','B+','B-','C+','C-','D+','D-',
+        'AB','AC','AD','BC','BD','CD',
+        'ABC','ABD','ACD','BCD','N'
+    ];
+    const PRECISION_MAIN_PUBLIC_RESULT_CODES = [
+        'A++','A+','A-','B++','B+','B-','C++','C+','C-','D++','D+','D-',
+        '!A','!B','!C','!D','AB','AC','AD','BC','BD','CD','AB#','AC#','AD#','BC#','BD#','CD#',
+        'ABC','ABD','ACD','BCD','N','N+','N-','∅'
+    ];
+    const STANDARD_ADVANCE_PUBLIC_RESULT_CODES = ['E','F','G','H','EG','EH','FG','FH','EF','GH','N'];
+    const PRECISION_ADVANCE_PUBLIC_RESULT_CODES = ['E','F','G','H','E++','F++','G++','H++','EG','EH','FG','FH','EF','GH','N'];
+
+    function getMainPublicResultCodes(courseId) {
+        return (courseId === 'normal_standard' || courseId === 'advance_standard')
+            ? STANDARD_MAIN_PUBLIC_RESULT_CODES
+            : PRECISION_MAIN_PUBLIC_RESULT_CODES;
+    }
+
+    function getAdvancePublicResultCodes(courseId) {
+        return courseId === 'advance_standard'
+            ? STANDARD_ADVANCE_PUBLIC_RESULT_CODES
+            : PRECISION_ADVANCE_PUBLIC_RESULT_CODES;
+    }
+
+    function getPublicCourseId() {
+        const map = {
+            STANDARD: 'normal_standard',
+            LIGHT: 'normal_light',
+            MEDIUM: 'normal_medium',
+            HEAVY: 'normal_heavy',
+            MAX: 'normal_max',
+            ADV_STANDARD: 'advance_standard',
+            ADV_LIGHT: 'advance_light',
+            ADV_MEDIUM: 'advance_medium',
+            ADV_HEAVY: 'advance_heavy',
+            ADV_MAX: 'advance_max'
+        };
+        return map[currentCourse.id] || null;
+    }
+
+    function getDisplayResultCode(key) {
+        return key === 'NEUTRAL' ? 'N' : (key || 'N');
+    }
+
+    async function submitCurrentPublicStats(resultKey, advanceKey) {
+        const fb = window.mtpsFirebase;
+        if (!fb || typeof fb.submitPublicStats !== 'function') {
+            console.warn('Firebase public stats is not ready.');
+            return;
+        }
+        const courseId = getPublicCourseId();
+        if (!courseId) {
+            console.warn('Unknown public stats course:', currentCourse.id);
+            return;
+        }
+        const mainCode = getDisplayResultCode(resultKey);
+        const allowedMainCodes = getMainPublicResultCodes(courseId);
+        if (!allowedMainCodes.includes(mainCode)) {
+            console.warn('This main result is not available for this course, so public stats were not submitted:', courseId, mainCode);
+            return;
+        }
+        const payload = {
+            courseId,
+            mode: currentCourse.isAdvance ? 'advance' : 'normal',
+            mainResult: mainCode
+        };
+        if (currentCourse.isAdvance) {
+            const advCode = advanceKey || 'N';
+            const allowedAdvanceCodes = getAdvancePublicResultCodes(courseId);
+            if (!allowedAdvanceCodes.includes(advCode)) {
+                console.warn('This advance result is not available for this course, so public stats were not submitted:', courseId, advCode);
+                return;
+            }
+            payload.advanceResult = advCode;
+        }
+        try {
+            await fb.submitPublicStats(payload);
+            console.info('Public stats submitted:', payload);
+        } catch (error) {
+            console.warn('Public stats submit failed:', error);
+        }
+    }
+
+    function encodeStatsKeyLocal(code) {
+        const fb = window.mtpsFirebase;
+        if (fb && typeof fb.encodeStatKey === 'function') return fb.encodeStatKey(code);
+        return String(code || 'N').replace(/∅/g, 'EMPTY').replace(/!/g, 'NOT_').replace(/\+/g, '_PLUS').replace(/#/g, '_SHARP').replace(/\//g, '__').replace(/[^A-Za-z0-9_]/g, '_');
+    }
+
+    function decodeStatsKeyLocal(key) {
+        const fb = window.mtpsFirebase;
+        if (fb && typeof fb.decodeStatKey === 'function') return fb.decodeStatKey(key);
+        return String(key || 'N').replace(/__/g, '/').replace(/_SHARP/g, '#').replace(/_PLUS/g, '+').replace(/^NOT_/, '!').replace(/EMPTY/g, '∅');
+    }
+
+    function readStatsCount(map, code) {
+        if (!map) return 0;
+        const safe = encodeStatsKeyLocal(code);
+        return Number(map[safe] || map[code] || 0);
+    }
+
+    function renderStatsChips(map, total, codes) {
+        return codes.map(code => {
+            const count = readStatsCount(map, code);
+            const percent = total > 0 ? (count / total * 100) : 0;
+            return `<div class="stats-chip"><strong>${escapeHtml(code)}: ${count}</strong><span>${percent.toFixed(1)}%</span></div>`;
+        }).join('');
+    }
+
+    function getRankedStatsEntries(map, total, codes, limit = 3) {
+        return codes
+            .map(code => {
+                const count = readStatsCount(map, code);
+                return { code, count, percent: total > 0 ? (count / total * 100) : 0 };
+            })
+            .filter(item => item.count > 0)
+            .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code, 'ja'))
+            .slice(0, limit);
+    }
+
+    function renderTop3Stats(map, total, codes, emptyText = 'まだランキングを作成できる結果がありません。') {
+        const entries = getRankedStatsEntries(map, total, codes, 3);
+        if (entries.length === 0) {
+            return `<div class="stats-empty" style="padding:1rem;">${escapeHtml(emptyText)}</div>`;
+        }
+        return `<div class="stats-top3-grid">${entries.map((item, index) => `
+            <div class="stats-rank-chip">
+                <strong>#${index + 1} ${escapeHtml(item.code)}</strong>
+                <span>${item.count}件 / ${item.percent.toFixed(1)}%</span>
+            </div>
+        `).join('')}</div>`;
+    }
+
+    function renderComboTop3Stats(map, total) {
+        if (!map || Object.keys(map).length === 0) return '<div class="stats-empty" style="padding:1rem;">組み合わせランキングはまだありません。</div>';
+        const entries = Object.entries(map)
+            .map(([key, value]) => ({ code: decodeStatsKeyLocal(key), count: Number(value || 0) }))
+            .filter(item => item.count > 0)
+            .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code, 'ja'))
+            .slice(0, 3);
+        if (entries.length === 0) return '<div class="stats-empty" style="padding:1rem;">組み合わせランキングはまだありません。</div>';
+        return `<div class="stats-top3-grid">${entries.map((item, index) => {
+            const percent = total > 0 ? (item.count / total * 100) : 0;
+            return `<div class="stats-rank-chip"><strong>#${index + 1} ${escapeHtml(item.code)}</strong><span>${item.count}件 / ${percent.toFixed(1)}%</span></div>`;
+        }).join('')}</div>`;
+    }
+
+    function renderComboStats(map, total) {
+        if (!map || Object.keys(map).length === 0) return '<div class="stats-empty" style="padding:1rem;">組み合わせ統計はまだありません。</div>';
+        const entries = Object.entries(map)
+            .map(([key, value]) => ({ code: decodeStatsKeyLocal(key), count: Number(value || 0) }))
+            .filter(item => item.count > 0)
+            .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code, 'ja'))
+            .slice(0, 30);
+        if (entries.length === 0) return '<div class="stats-empty" style="padding:1rem;">組み合わせ統計はまだありません。</div>';
+        return entries.map(item => {
+            const percent = total > 0 ? (item.count / total * 100) : 0;
+            return `<div class="stats-chip"><strong>${escapeHtml(item.code)}: ${item.count}</strong><span>${percent.toFixed(1)}%</span></div>`;
+        }).join('');
+    }
+
+    async function renderPublicStats() {
+        const container = document.getElementById('public-stats-list');
+        if (!container) return;
+        const fb = window.mtpsFirebase;
+        if (!fb || typeof fb.loadPublicStats !== 'function') {
+            container.innerHTML = '<div class="stats-error">Firebaseがまだ初期化されていません。数秒後にもう一度REFRESHしてください。</div>';
+            return;
+        }
+        container.innerHTML = '<div class="stats-loading">公開統計を読み込み中...</div>';
+        try {
+            const stats = await fb.loadPublicStats();
+            const hasAny = stats && Object.keys(stats).length > 0;
+            if (!hasAny) {
+                container.innerHTML = '<div class="stats-empty">まだ公開統計がありません。診断完了後に自動でコース別集計へ反映されます。</div>';
+                return;
+            }
+            container.innerHTML = PUBLIC_STATS_COURSE_ORDER.map(courseId => {
+                const meta = PUBLIC_STATS_COURSE_META[courseId];
+                const doc = stats[courseId] || {};
+                const total = Number(doc.total || 0);
+                const isAdvance = meta.mode === 'advance';
+                const mainCodes = getMainPublicResultCodes(courseId);
+                const advanceCodes = getAdvancePublicResultCodes(courseId);
+                return `
+                    <div class="stats-course-card" style="border-left-color:${isAdvance ? 'var(--color-e)' : 'var(--color-accent)'};">
+                        <div class="stats-course-head">
+                            <div>
+                                <div class="stats-course-title">${escapeHtml(meta.label)}</div>
+                                <div style="color:var(--color-dim); font-size:0.82rem; font-family:var(--font-mono);">${meta.questions}問 / ALL:${meta.allPerAxis} / ${escapeHtml(courseId)}</div>
+                            </div>
+                            <div class="stats-total">TOTAL: ${total}</div>
+                        </div>
+                        <div class="stats-section-title">診断コース別診断結果ランキング TOP3</div>
+                        ${renderTop3Stats(doc.mainResults || {}, total, mainCodes)}
+                        <div class="stats-section-title">Main Results</div>
+                        <div class="stats-subtle-note">このコースで実際に出る可能性がある結果だけを表示しています。</div>
+                        <div class="stats-grid">${renderStatsChips(doc.mainResults || {}, total, mainCodes)}</div>
+                        ${isAdvance ? `
+                            <div class="stats-section-title">Advance Axis Ranking TOP3</div>
+                            ${renderTop3Stats(doc.advanceResults || {}, total, advanceCodes, 'Advance Axisのランキングはまだありません。')}
+                            <div class="stats-section-title">Advance Axis Results</div>
+                            <div class="stats-subtle-note">Advance Standardでは、標準判定で出ない補助結果は表示しません。</div>
+                            <div class="stats-grid">${renderStatsChips(doc.advanceResults || {}, total, advanceCodes)}</div>
+                            <div class="stats-section-title">Main / Adv Combination TOP3</div>
+                            ${renderComboTop3Stats(doc.comboResults || {}, total)}
+                            <div class="stats-section-title">Main / Adv Combination Details</div>
+                            <div class="stats-grid">${renderComboStats(doc.comboResults || {}, total)}</div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.warn('Public stats load failed:', error);
+            container.innerHTML = `<div class="stats-error">公開統計の読み込みに失敗しました。<br>${escapeHtml(error.message || error)}</div>`;
+        }
+    }
+
     const HISTORY_STORAGE_KEY = 'mtps-result-history-v1';
     const HISTORY_LIMIT = 50;
 
@@ -2455,7 +4223,7 @@
         }
     }
 
-    function saveHistoryEntry(resultKey, data, normalized, composition) {
+    function saveHistoryEntry(resultKey, data, normalized, composition, advanceKey = null, advanceData = null, allNormalized = null) {
         const stats = getAnswerStats();
         const displayKey = resultKey === 'NEUTRAL' ? 'N' : resultKey;
         const entry = {
@@ -2468,6 +4236,8 @@
             courseId: currentCourse.id,
             questionCount: activeQuestions.length,
             questionSet: getQuestionSetText(),
+            advanceKey: advanceKey,
+            advanceTitle: advanceData ? advanceData.title : null,
             scores: {
                 A: Number(scores.A.toFixed(3)),
                 B: Number(scores.B.toFixed(3)),
@@ -2550,7 +4320,7 @@
                         </div>
                         <div class="history-date">${formatHistoryDate(entry.savedAt)}<br>${escapeHtml(entry.courseId || '')}</div>
                     </div>
-                    <div class="history-course">${safeCourse}<br>${safeQuestionSet}</div>
+                    <div class="history-course">${safeCourse}<br>${safeQuestionSet}${entry.advanceKey ? `<br>Advance Axis: ${escapeHtml(entry.advanceKey)} ${escapeHtml(entry.advanceTitle || '')}` : ''}</div>
                     <div class="history-score-grid">
                         <div class="history-score-item" style="border-top:2px solid var(--color-a);">A<strong>${Number(comp.A || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.A || 0).toFixed(1)}%</span></div>
                         <div class="history-score-item" style="border-top:2px solid var(--color-b);">B<strong>${Number(comp.B || 0).toFixed(1)}%</strong><span>構成比 / 濃度 ${Number(n.B || 0).toFixed(1)}%</span></div>
@@ -2572,13 +4342,116 @@
         renderHistory();
     }
 
+    function colorVarForType(type) {
+        return `var(--color-${String(type).toLowerCase()})`;
+    }
+
+    function renderMiniPie(elementId, composition, types, codeLabel) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        let start = 0;
+        const stops = types.map(type => {
+            const value = composition[type] || 0;
+            const seg = `${colorVarForType(type)} ${start}% ${start + value}%`;
+            start += value;
+            return seg;
+        });
+        el.style.background = `conic-gradient(from 0deg, ${stops.join(', ')})`;
+        el.setAttribute('data-code', codeLabel || types.join(''));
+    }
+
+    function renderAxisLegend(elementId, types, composition, normalized) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.innerHTML = types.map(type => `
+            <div class="advance-legend-row">
+                <span class="advance-dot" style="background:${colorVarForType(type)}"></span>
+                <span>${TYPE_LABELS[type]} (${type}): 構成 ${Number(composition[type] || 0).toFixed(1)}% / 濃度 ${Number(normalized[type] || 0).toFixed(1)}%</span>
+            </div>
+        `).join('');
+    }
+
+    function renderRadarChart(normalizedAll) {
+        const svg = document.getElementById('radar-chart');
+        if (!svg) return;
+        const types = ALL_TYPES;
+        const cx = 130, cy = 130, maxR = 88;
+        const labelR = 110;
+        const pointsFor = (scale) => types.map((type, i) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const r = maxR * scale;
+            return `${cx + Math.cos(angle) * r},${cy + Math.sin(angle) * r}`;
+        }).join(' ');
+        const dataPoints = types.map((type, i) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const r = maxR * Math.max(0, Math.min(100, normalizedAll[type] || 0)) / 100;
+            return `${cx + Math.cos(angle) * r},${cy + Math.sin(angle) * r}`;
+        }).join(' ');
+        const axes = types.map((type, i) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const x = cx + Math.cos(angle) * maxR;
+            const y = cy + Math.sin(angle) * maxR;
+            const lx = cx + Math.cos(angle) * labelR;
+            const ly = cy + Math.sin(angle) * labelR;
+            return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(148,163,184,0.45)" stroke-width="1" />
+                    <text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="currentColor" font-size="12" font-family="var(--font-mono)">${type}</text>`;
+        }).join('');
+        svg.innerHTML = `
+            <g style="color:var(--color-text)">
+                <polygon points="${pointsFor(1)}" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="1" />
+                <polygon points="${pointsFor(0.75)}" fill="none" stroke="rgba(148,163,184,0.25)" stroke-width="1" />
+                <polygon points="${pointsFor(0.5)}" fill="none" stroke="rgba(148,163,184,0.20)" stroke-width="1" />
+                <polygon points="${pointsFor(0.25)}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="1" />
+                ${axes}
+                <polygon points="${dataPoints}" fill="rgba(100,255,218,0.22)" stroke="var(--color-accent)" stroke-width="2" />
+                ${types.map((type, i) => {
+                    const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+                    const r = maxR * Math.max(0, Math.min(100, normalizedAll[type] || 0)) / 100;
+                    const x = cx + Math.cos(angle) * r;
+                    const y = cy + Math.sin(angle) * r;
+                    return `<circle cx="${x}" cy="${y}" r="3" fill="${colorVarForType(type)}" />`;
+                }).join('')}
+            </g>`;
+    }
+
+    function renderAdvanceResult(mainResultKey, advanceKey, allNormalized) {
+        const visuals = document.getElementById('advance-visuals');
+        const box = document.getElementById('advance-result-box');
+        if (!currentCourse.isAdvance) {
+            if (visuals) visuals.classList.remove('active');
+            if (box) box.style.display = 'none';
+            return;
+        }
+        if (visuals) visuals.classList.add('active');
+        const mainNorm = getNormalizedScores(MAIN_TYPES);
+        const advNorm = getNormalizedScores(ADVANCE_TYPES);
+        const mainComp = getCompositionScores(mainNorm, MAIN_TYPES);
+        const advComp = getCompositionScores(advNorm, ADVANCE_TYPES);
+        const advData = advanceResultsData[advanceKey] || advanceResultsData.N;
+        renderMiniPie('main-mini-pie', mainComp, MAIN_TYPES, mainResultKey === 'NEUTRAL' ? 'N' : mainResultKey);
+        renderMiniPie('advance-mini-pie', advComp, ADVANCE_TYPES, advanceKey || 'N');
+        renderAxisLegend('main-mini-legend', MAIN_TYPES, mainComp, mainNorm);
+        renderAxisLegend('advance-mini-legend', ADVANCE_TYPES, advComp, advNorm);
+        renderRadarChart(allNormalized || getNormalizedScores(ALL_TYPES));
+        if (box) {
+            box.style.display = 'block';
+            box.innerHTML = `
+                <div class="advance-result-code">ADVANCE AXIS: ${escapeHtml(advanceKey || 'N')}</div>
+                <strong>${escapeHtml(advData.title)}</strong><br>
+                <span style="color:var(--color-dim); font-style:italic;">${advData.quote}</span><br>
+                <span>${advData.desc}</span>
+            `;
+        }
+    }
+
     function showResult() {
         document.getElementById('progress-fill').style.width = '100%';
 
         // Result intensity is each axis' normalized reaction rate.
         // The pie chart uses composition, so A+B+C+D is always 100% visually.
-        const normalized = getNormalizedScores();
-        const composition = getCompositionScores(normalized);
+        const normalized = getNormalizedScores(MAIN_TYPES);
+        const composition = getCompositionScores(normalized, MAIN_TYPES);
+        const allNormalized = getNormalizedScores(getActiveTypes());
 
         const pA = composition.A;
         const pB = composition.B;
@@ -2586,9 +4459,12 @@
         const pD = composition.D;
 
         const resultKey = decideResultKey();
+        const advanceKey = getAdvanceAxisResultKey();
         const data = resultsData[resultKey] || resultsData.NEUTRAL;
+        const advanceData = advanceKey ? (advanceResultsData[advanceKey] || advanceResultsData.N) : null;
 
         // Render Result
+        resultScreen.classList.toggle('advance-result-mode', !!currentCourse.isAdvance);
         switchScreen(quizScreen, resultScreen);
 
         // Chart Animation
@@ -2608,22 +4484,23 @@
             }
         });
 
-        saveHistoryEntry(resultKey, data, normalized, composition);
+        saveHistoryEntry(resultKey, data, normalized, composition, advanceKey, advanceData, allNormalized);
+        submitCurrentPublicStats(resultKey, advanceKey);
 
         // Update Legend with composition ratios and intensity rates.
         document.getElementById('result-legend').innerHTML = `
-            <div style="width:100%; text-align:center; color:var(--color-dim); font-size:0.78rem; margin-bottom:0.25rem;">円グラフ: 構成比 / 濃度: 各思想の最大値に対する反応率</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div>回帰淘汰 (A): 構成 ${composition.A.toFixed(1)}% / 濃度 ${normalized.A.toFixed(1)}%</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div>共命包摂 (B): 構成 ${composition.B.toFixed(1)}% / 濃度 ${normalized.B.toFixed(1)}%</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div>適応進転 (C): 構成 ${composition.C.toFixed(1)}% / 濃度 ${normalized.C.toFixed(1)}%</div>
-            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div>無差総質 (D): 構成 ${composition.D.toFixed(1)}% / 濃度 ${normalized.D.toFixed(1)}%</div>
+            <div class="legend-note">円グラフ: 構成比 / 濃度: 各思想の最大値に対する反応率</div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-a)"></div><span>回帰淘汰 (A)<br>構成 ${composition.A.toFixed(1)}% / 濃度 ${normalized.A.toFixed(1)}%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-b)"></div><span>共命包摂 (B)<br>構成 ${composition.B.toFixed(1)}% / 濃度 ${normalized.B.toFixed(1)}%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-c)"></div><span>適応進転 (C)<br>構成 ${composition.C.toFixed(1)}% / 濃度 ${normalized.C.toFixed(1)}%</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:var(--color-d)"></div><span>無差総質 (D)<br>構成 ${composition.D.toFixed(1)}% / 濃度 ${normalized.D.toFixed(1)}%</span></div>
         `;
 
         // DOM Updates
         document.getElementById('result-course').innerText = `COURSE: ${currentCourse.shareName} / ${getQuestionSetText()}`;
         const readableResultColor = getReadableResultColor(data.color);
         const resultCodeEl = document.getElementById('result-code');
-        resultCodeEl.innerText = resultKey === 'NEUTRAL' ? 'N' : resultKey;
+        resultCodeEl.innerText = currentCourse.isAdvance && advanceKey ? `${resultKey === 'NEUTRAL' ? 'N' : resultKey}/${advanceKey}` : (resultKey === 'NEUTRAL' ? 'N' : resultKey);
         resultCodeEl.style.color = readableResultColor;
 
         const rTitle = document.getElementById('result-title');
@@ -2637,20 +4514,47 @@
 
         rQuote.innerHTML = data.quote;
         rDesc.innerHTML = data.desc;
+        renderAdvanceResult(resultKey, advanceKey, allNormalized);
 
         gsap.from([rCard], { y: 30, opacity: 0, duration: 0.8, delay: 0.2 });
     }
 
+    function getShareQuestionSetText() {
+        if (currentCourse.isAdvance) {
+            const counts = currentQuestionSetMeta.typeCounts || {};
+            const activeTypes = getActiveTypes();
+            const values = activeTypes.map(t => Number(counts[t] || 0));
+            const allSame = values.length > 0 && values.every(v => v === values[0]);
+            const perAxis = allSame ? values[0] : Math.round((currentCourse.count || activeQuestions.length || 0) / 8);
+            return `ALL:${perAxis}`;
+        }
+        return getQuestionSetText();
+    }
+
     function shareOnTwitter() {
-        const title = document.getElementById('result-title').innerText;
-        const quote = document.getElementById('result-quote').innerText;
         const course = currentCourse.shareName || 'UNKNOWN COURSE';
-
-        const questionSet = getQuestionSetText();
-
-        const text = `【思想診断システム】\n受診コース: ${course}\n問題構成: ${questionSet}\n診断結果: ${title}\n${quote}\n\nあなたの思想を解析します。`;
+        const questionSet = getShareQuestionSetText();
+        const resultCode = document.getElementById('result-code').innerText.trim();
         const hashtags = "Mtps思想診断";
-        const url = "https://unknownthedeltia.github.io/mip/";
+        const url = "https://unknownthedeltia.github.io/mip";
+        let text;
+
+        if (currentCourse.isAdvance) {
+            const parts = resultCode.split('/').map(v => v.trim()).filter(Boolean);
+            const mainCode = parts[0] || 'N';
+            const advCode = parts[1] || 'N';
+            text = `【Mtps思想診断】
+${course}
+問題構成: ${questionSet}
+[Main] ${mainCode}
+[Adv] ${advCode}`;
+        } else {
+            const title = document.getElementById('result-title').innerText;
+            text = `【Mtps思想診断】
+${course}
+問題構成: ${questionSet}
+診断結果: ${title}`;
+        }
 
         const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}&url=${encodeURIComponent(url)}`;
 
