@@ -11,6 +11,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <!-- GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <!-- html2canvas for result image export -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
     <!-- Firebase -->
     <script type="module">
@@ -452,6 +454,26 @@
             background: #ff4f8b;
             color: #ffffff;
             box-shadow: 0 0 20px rgba(255, 79, 139, 0.4);
+        }
+
+        .btn-copy {
+            border-color: #c084fc;
+            color: #c084fc;
+        }
+        .btn-copy:hover {
+            background: #c084fc;
+            color: #ffffff;
+            box-shadow: 0 0 20px rgba(192, 132, 252, 0.4);
+        }
+
+        .btn-invite {
+            border-color: #2ed573;
+            color: #2ed573;
+        }
+        .btn-invite:hover {
+            background: #2ed573;
+            color: #07130c;
+            box-shadow: 0 0 20px rgba(46, 213, 115, 0.4);
         }
 
         .menu-action-box {
@@ -1974,6 +1996,196 @@
             }
         }
 
+
+
+        /* --- Result Image Card / PNG Export (v1.7.0) --- */
+        .result-image-card {
+            position: fixed;
+            left: -200vw;
+            top: 0;
+            width: 1200px;
+            min-height: 675px;
+            padding: 48px;
+            background: radial-gradient(circle at top left, rgba(100,255,218,0.12), transparent 34%), #050505;
+            color: #e0e6ed;
+            font-family: 'Noto Sans JP', sans-serif;
+            border: 1px solid rgba(100, 255, 218, 0.35);
+            box-shadow: 0 0 80px rgba(0, 0, 0, 0.8);
+            z-index: -10;
+            pointer-events: none;
+            opacity: 1;
+        }
+
+        .image-card-header,
+        .image-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .image-card-brand {
+            color: #64ffda;
+            font-size: 34px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            text-shadow: 0 0 18px rgba(100, 255, 218, 0.28);
+        }
+
+        .image-card-course,
+        .image-card-hashtag,
+        .image-card-footer {
+            color: #94a3b8;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+
+        .image-card-main {
+            display: grid;
+            grid-template-columns: 0.9fr 1.45fr;
+            gap: 36px;
+            align-items: center;
+            margin-top: 36px;
+        }
+
+        .image-card-class {
+            padding: 30px;
+            min-height: 310px;
+            border: 1px solid rgba(255,255,255,0.10);
+            border-left: 5px solid #64ffda;
+            border-radius: 26px;
+            background: rgba(255,255,255,0.035);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .image-card-label {
+            font-family: 'Share Tech Mono', monospace;
+            color: #94a3b8;
+            font-size: 18px;
+            letter-spacing: 0.16em;
+            margin-bottom: 10px;
+        }
+
+        .image-card-code {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 76px;
+            font-weight: bold;
+            color: #64ffda;
+            line-height: 1.05;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .image-card-title {
+            margin-top: 16px;
+            font-size: 27px;
+            font-weight: 700;
+            line-height: 1.42;
+            color: #f8fafc;
+        }
+
+        .image-card-chart-area {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+            align-items: center;
+            padding: 24px;
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 24px;
+        }
+
+        .image-card-pie {
+            position: relative;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: conic-gradient(#333 0% 100%);
+            box-shadow: 0 0 32px rgba(0,0,0,0.35);
+        }
+
+        .image-card-pie.small {
+            width: 220px;
+            height: 220px;
+        }
+
+        .image-card-pie-center {
+            position: absolute;
+            inset: 26%;
+            border-radius: 50%;
+            background: #050505;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Share Tech Mono', monospace;
+            color: #e0e6ed;
+            font-size: 24px;
+            letter-spacing: 0.08em;
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .image-card-legend {
+            display: grid;
+            gap: 10px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 18px;
+            line-height: 1.45;
+        }
+
+        .image-card-legend-row {
+            display: grid;
+            grid-template-columns: 18px 1fr;
+            gap: 10px;
+            align-items: start;
+        }
+
+        .image-card-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-top: 6px;
+        }
+
+        .image-card-legend-row strong {
+            color: #f8fafc;
+        }
+
+        .image-card-advance-area {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 24px;
+            margin-top: 28px;
+        }
+
+        .image-card-radar-wrap {
+            padding: 24px;
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-card-footer {
+            margin-top: 32px;
+            border-top: 1px solid rgba(255,255,255,0.12);
+            padding-top: 20px;
+        }
+
+        .btn-image {
+            border-color: #64ffda;
+            color: #64ffda;
+        }
+        .btn-image:hover {
+            background: #64ffda;
+            color: #050505;
+            box-shadow: 0 0 20px rgba(100, 255, 218, 0.38);
+        }
+
     </style>
 </head>
 <body class="mode-desktop theme-dark">
@@ -2042,7 +2254,7 @@
 
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>IDEOLOGY PROFILER v1.3.0</h1>
+            <h1>IDEOLOGY PROFILER v1.3.1</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
@@ -2493,6 +2705,11 @@
                     <div style="margin-top: 2rem; text-align: center; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
                         <button class="btn" onclick="restartQuiz()" style="padding: 0.5rem 2rem; font-size: 1rem;">RESET</button>
                         <button class="btn btn-share" onclick="shareOnTwitter()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE (X)</button>
+                        <button class="btn btn-share" onclick="quickShareOnTwitter()" style="padding: 0.5rem 2rem; font-size: 1rem;">QUICK SHARE</button>
+                        <button class="btn btn-copy" onclick="shareResultToApps()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE</button>
+                        <button class="btn btn-copy" onclick="copyResultShareText()" style="padding: 0.5rem 2rem; font-size: 1rem;">COPY</button>
+                        <button class="btn btn-image" onclick="saveResultImage()" style="padding: 0.5rem 2rem; font-size: 1rem;">SAVE IMAGE</button>
+                        <button class="btn btn-image" onclick="shareResultImage()" style="padding: 0.5rem 2rem; font-size: 1rem;">SHARE IMAGE</button>
                         <button class="btn btn-hashtag" onclick="openHashtagResults()" style="padding: 0.5rem 2rem; font-size: 1rem;">Xで他の人の結果を見る</button>
                         <button class="btn btn-history" onclick="renderHistory(); switchScreen(resultScreen, historyScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">HISTORY</button>
                         <button class="btn btn-stats" onclick="renderPublicStats(); switchScreen(resultScreen, publicStatsScreen);" style="padding: 0.5rem 2rem; font-size: 1rem;">PUBLIC STATS</button>
@@ -2503,6 +2720,51 @@
                 </div>
             </div>
         </div>
+
+        <!-- Hidden PNG export card. Updated from the current result before SAVE/SHARE IMAGE. -->
+        <div id="result-image-card" class="result-image-card" aria-hidden="true">
+            <div class="image-card-header">
+                <div>
+                    <div class="image-card-brand">Mtps思想診断</div>
+                    <div class="image-card-course" id="image-card-course">COURSE: --</div>
+                </div>
+                <div class="image-card-hashtag">#Mtps思想診断</div>
+            </div>
+
+            <div class="image-card-main">
+                <div class="image-card-class" id="image-card-class-box">
+                    <div class="image-card-label">CLASS</div>
+                    <div class="image-card-code" id="image-card-code">--</div>
+                    <div class="image-card-title" id="image-card-title">---</div>
+                </div>
+
+                <div class="image-card-chart-area">
+                    <div id="image-card-main-pie" class="image-card-pie">
+                        <div class="image-card-pie-center">MAIN</div>
+                    </div>
+                    <div id="image-card-main-legend" class="image-card-legend"></div>
+                </div>
+            </div>
+
+            <div id="image-card-advance-area" class="image-card-advance-area" style="display:none;">
+                <div class="image-card-chart-area">
+                    <div id="image-card-adv-pie" class="image-card-pie small">
+                        <div class="image-card-pie-center">ADV</div>
+                    </div>
+                    <div id="image-card-adv-legend" class="image-card-legend"></div>
+                </div>
+
+                <div class="image-card-radar-wrap">
+                    <svg id="image-card-radar" width="260" height="260" viewBox="0 0 260 260" role="img" aria-label="A〜H 全体レーダーチャート"></svg>
+                </div>
+            </div>
+
+            <div class="image-card-footer">
+                <span>https://unknownthedeltia.github.io/mip/</span>
+                <span>Author: Metalepsis_</span>
+            </div>
+        </div>
+
     </div>
 
 <script>
@@ -4444,6 +4706,14 @@
         }
     }
 
+    function formatDisplayResultCode(mainKey, advanceKey) {
+        const main = mainKey === 'NEUTRAL' ? 'N' : (mainKey || 'N');
+        if (currentCourse && currentCourse.isAdvance) {
+            return `${main}/${advanceKey || 'N'}`;
+        }
+        return main;
+    }
+
     function showResult() {
         document.getElementById('progress-fill').style.width = '100%';
 
@@ -4500,7 +4770,7 @@
         document.getElementById('result-course').innerText = `COURSE: ${currentCourse.shareName} / ${getQuestionSetText()}`;
         const readableResultColor = getReadableResultColor(data.color);
         const resultCodeEl = document.getElementById('result-code');
-        resultCodeEl.innerText = currentCourse.isAdvance && advanceKey ? `${resultKey === 'NEUTRAL' ? 'N' : resultKey}/${advanceKey}` : (resultKey === 'NEUTRAL' ? 'N' : resultKey);
+        resultCodeEl.innerText = formatDisplayResultCode(resultKey, advanceKey);
         resultCodeEl.style.color = readableResultColor;
 
         const rTitle = document.getElementById('result-title');
@@ -4516,8 +4786,249 @@
         rDesc.innerHTML = data.desc;
         renderAdvanceResult(resultKey, advanceKey, allNormalized);
 
+        // Use the calculation result directly instead of reading the DOM.
+        // This prevents the image card from falling back to its initial "N"
+        // when the visible result code has not painted yet or is affected by share/image timing.
+        const resultDisplayCode = formatDisplayResultCode(resultKey, advanceKey);
+        const imageAdvNorm = currentCourse.isAdvance ? getNormalizedScores(ADVANCE_TYPES) : {};
+        const imageAdvComp = currentCourse.isAdvance ? getCompositionScores(imageAdvNorm, ADVANCE_TYPES) : {};
+        lastResultImagePayload = {
+            isAdvance: !!currentCourse.isAdvance,
+            courseLabel: `${currentCourse.shareName} / ${getQuestionSetText()}`,
+            displayCode: resultDisplayCode,
+            title: data.title,
+            color: data.color || readableResultColor,
+            mainComposition: composition,
+            mainIntensity: normalized,
+            advanceComposition: imageAdvComp,
+            advanceIntensity: imageAdvNorm,
+            allIntensity: allNormalized
+        };
+        updateResultImageCard(lastResultImagePayload);
+
         gsap.from([rCard], { y: 30, opacity: 0, duration: 0.8, delay: 0.2 });
     }
+
+
+
+    const RESULT_IMAGE_COLORS = {
+        A: '#ff4757', B: '#2ed573', C: '#1e90ff', D: '#a4b0be',
+        E: '#ffb020', F: '#c084fc', G: '#f97316', H: '#14b8a6'
+    };
+    let lastResultImagePayload = null;
+
+    function setImageCardText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value == null ? '' : String(value);
+    }
+
+    function renderImagePie(elementId, composition, keys) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        let start = 0;
+        const parts = keys.map((key) => {
+            const value = Math.max(0, Number(composition && composition[key] || 0));
+            const end = Math.min(100, start + value);
+            const part = `${RESULT_IMAGE_COLORS[key] || '#94a3b8'} ${start}% ${end}%`;
+            start = end;
+            return part;
+        });
+        if (start < 100) parts.push(`#1f2937 ${start}% 100%`);
+        el.style.background = `conic-gradient(from 0deg, ${parts.join(', ')})`;
+    }
+
+    function renderImageLegend(elementId, composition, intensity, keys) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.innerHTML = keys.map((key) => {
+            const comp = Number(composition && composition[key] || 0).toFixed(1);
+            const inten = Number(intensity && intensity[key] || 0).toFixed(1);
+            const label = TYPE_LABELS[key] || key;
+            return `
+                <div class="image-card-legend-row">
+                    <span class="image-card-dot" style="background:${RESULT_IMAGE_COLORS[key] || '#94a3b8'}"></span>
+                    <span><strong>${key}</strong> ${escapeHtml(label)}<br>構成 ${comp}% / 濃度 ${inten}%</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderImageRadar(elementId, normalizedAll) {
+        const svg = document.getElementById(elementId);
+        if (!svg) return;
+        const types = ALL_TYPES;
+        const cx = 130, cy = 130, maxR = 88, labelR = 110;
+        const point = (type, i, radiusScale) => {
+            const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+            const r = maxR * radiusScale;
+            return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
+        };
+        const polygon = (scale) => types.map((type, i) => {
+            const p = point(type, i, scale);
+            return `${p.x},${p.y}`;
+        }).join(' ');
+        const dataPoints = types.map((type, i) => {
+            const value = Math.max(0, Math.min(100, Number(normalizedAll && normalizedAll[type] || 0))) / 100;
+            const p = point(type, i, value);
+            return `${p.x},${p.y}`;
+        }).join(' ');
+        const axes = types.map((type, i) => {
+            const end = point(type, i, 1);
+            const label = (() => {
+                const angle = -Math.PI / 2 + (Math.PI * 2 * i / types.length);
+                return { x: cx + Math.cos(angle) * labelR, y: cy + Math.sin(angle) * labelR };
+            })();
+            return `<line x1="${cx}" y1="${cy}" x2="${end.x}" y2="${end.y}" stroke="rgba(148,163,184,0.45)" stroke-width="1" />
+                    <text x="${label.x}" y="${label.y}" text-anchor="middle" dominant-baseline="middle" fill="#e0e6ed" font-size="13" font-family="Share Tech Mono, monospace">${type}</text>`;
+        }).join('');
+        const dots = types.map((type, i) => {
+            const value = Math.max(0, Math.min(100, Number(normalizedAll && normalizedAll[type] || 0))) / 100;
+            const p = point(type, i, value);
+            return `<circle cx="${p.x}" cy="${p.y}" r="3.6" fill="${RESULT_IMAGE_COLORS[type] || '#64ffda'}" />`;
+        }).join('');
+        svg.innerHTML = `
+            <polygon points="${polygon(1)}" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="1" />
+            <polygon points="${polygon(0.75)}" fill="none" stroke="rgba(148,163,184,0.25)" stroke-width="1" />
+            <polygon points="${polygon(0.5)}" fill="none" stroke="rgba(148,163,184,0.20)" stroke-width="1" />
+            <polygon points="${polygon(0.25)}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="1" />
+            ${axes}
+            <polygon points="${dataPoints}" fill="rgba(100,255,218,0.22)" stroke="#64ffda" stroke-width="2.2" />
+            ${dots}
+        `;
+    }
+
+    function updateResultImageCard(payload = lastResultImagePayload) {
+        if (!payload) return;
+        const displayCode = payload.displayCode || 'N';
+        setImageCardText('image-card-course', `COURSE: ${payload.courseLabel || '--'}`);
+        setImageCardText('image-card-code', displayCode);
+        setImageCardText('image-card-title', payload.title || '---');
+        const classBox = document.getElementById('image-card-class-box');
+        if (classBox) classBox.style.borderLeftColor = payload.color || '#64ffda';
+        const codeEl = document.getElementById('image-card-code');
+        if (codeEl) codeEl.style.color = payload.color || '#64ffda';
+        renderImagePie('image-card-main-pie', payload.mainComposition, MAIN_TYPES);
+        renderImageLegend('image-card-main-legend', payload.mainComposition, payload.mainIntensity, MAIN_TYPES);
+
+        const advanceArea = document.getElementById('image-card-advance-area');
+        if (payload.isAdvance && advanceArea) {
+            advanceArea.style.display = 'grid';
+            renderImagePie('image-card-adv-pie', payload.advanceComposition, ADVANCE_TYPES);
+            renderImageLegend('image-card-adv-legend', payload.advanceComposition, payload.advanceIntensity, ADVANCE_TYPES);
+            renderImageRadar('image-card-radar', payload.allIntensity);
+        } else if (advanceArea) {
+            advanceArea.style.display = 'none';
+        }
+    }
+
+    async function createResultImageBlob() {
+        updateResultImageCard();
+        const card = document.getElementById('result-image-card');
+        if (!card) throw new Error('Result image card was not found.');
+        if (!window.html2canvas) throw new Error('html2canvas is not loaded.');
+        if (document.fonts && document.fonts.ready) {
+            try { await document.fonts.ready; } catch (_) {}
+        }
+        const previousInlineStyle = {
+            left: card.style.left,
+            top: card.style.top,
+            zIndex: card.style.zIndex,
+            opacity: card.style.opacity
+        };
+        card.style.left = '0';
+        card.style.top = '0';
+        card.style.zIndex = '-1';
+        card.style.opacity = '1';
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        let canvas;
+        try {
+            canvas = await html2canvas(card, {
+                backgroundColor: '#050505',
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                windowWidth: 1400,
+                windowHeight: 1000
+            });
+        } finally {
+            card.style.left = previousInlineStyle.left;
+            card.style.top = previousInlineStyle.top;
+            card.style.zIndex = previousInlineStyle.zIndex;
+            card.style.opacity = previousInlineStyle.opacity;
+        }
+        return new Promise((resolve, reject) => {
+            canvas.toBlob((blob) => {
+                if (blob) resolve(blob);
+                else reject(new Error('Failed to create image blob.'));
+            }, 'image/png');
+        });
+    }
+
+    async function saveResultImage() {
+        try {
+            const blob = await createResultImageBlob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const code = (document.getElementById('result-code')?.innerText || 'result').replace(/[^A-Za-z0-9_-]+/g, '_');
+            link.download = `mtps-result-${code}-${Date.now()}.png`;
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } catch (error) {
+            console.error(error);
+            alert('画像保存に失敗しました。ブラウザを更新してもう一度試してください。');
+        }
+    }
+
+    async function copyImageShareTextSilently() {
+        const text = `${buildResultShareText()}
+#Mtps思想診断
+${MTPS_SITE_URL}`;
+        try {
+            await copyTextToClipboard(text);
+            return true;
+        } catch (error) {
+            console.warn('Failed to copy share text before image sharing.', error);
+            return false;
+        }
+    }
+
+    async function shareResultImage() {
+        try {
+            const copiedText = await copyImageShareTextSilently();
+            const blob = await createResultImageBlob();
+            const file = new File([blob], 'mtps-result.png', { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+                await navigator.share({
+                    title: 'Mtps思想診断 結果',
+                    text: `${buildResultShareText()}\n#Mtps思想診断\n${MTPS_SITE_URL}`,
+                    files: [file]
+                });
+                if (copiedText) {
+                    alert('画像共有ではアプリによって文字が渡らない場合があるため、共有文もクリップボードにコピーしました。');
+                }
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `mtps-result-${Date.now()}.png`;
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            alert(copiedText
+                ? 'この環境では画像共有に対応していないため、PNG画像として保存しました。共有文はコピー済みです。'
+                : 'この環境では画像共有に対応していないため、PNG画像として保存しました。');
+        } catch (error) {
+            if (error && error.name === 'AbortError') return;
+            console.error(error);
+            alert('画像共有に失敗しました。PNG保存を試してください。');
+        }
+    }
+
 
     function getShareQuestionSetText() {
         if (currentCourse.isAdvance) {
@@ -4531,34 +5042,185 @@
         return getQuestionSetText();
     }
 
-    function shareOnTwitter() {
+    const MTPS_SITE_URL = "https://unknownthedeltia.github.io/mip/";
+
+    function buildResultShareText() {
         const course = currentCourse.shareName || 'UNKNOWN COURSE';
         const questionSet = getShareQuestionSetText();
         const resultCode = document.getElementById('result-code').innerText.trim();
-        const hashtags = "Mtps思想診断";
-        const url = "https://unknownthedeltia.github.io/mip";
-        let text;
 
         if (currentCourse.isAdvance) {
             const parts = resultCode.split('/').map(v => v.trim()).filter(Boolean);
             const mainCode = parts[0] || 'N';
             const advCode = parts[1] || 'N';
-            text = `【Mtps思想診断】
+            return `【Mtps思想診断】
 ${course}
 問題構成: ${questionSet}
 [Main] ${mainCode}
 [Adv] ${advCode}`;
-        } else {
-            const title = document.getElementById('result-title').innerText;
-            text = `【Mtps思想診断】
+        }
+
+        const title = document.getElementById('result-title').innerText;
+        return `【Mtps思想診断】
 ${course}
 問題構成: ${questionSet}
 診断結果: ${title}`;
+    }
+
+    function buildInviteShareText() {
+        return `【Mtps思想診断】
+A/B/C/D、AdvanceではA〜Hの観点から思想傾向を診断できます。
+あなたも診断してみてください。`;
+    }
+
+    async function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
         }
 
-        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}&url=${encodeURIComponent(url)}`;
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!ok) throw new Error('Copy command failed.');
+        return true;
+    }
 
-        window.open(tweetUrl, '_blank', 'noopener,noreferrer');
+    async function shareTextOrCopy({ title, text, url, copiedMessage }) {
+        const shareData = { title, text, url };
+        try {
+            if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+                await navigator.share(shareData);
+                return;
+            }
+        } catch (error) {
+            if (error && error.name === 'AbortError') return;
+            console.warn('Web Share failed. Falling back to clipboard.', error);
+        }
+
+        await copyTextToClipboard(`${text}
+${url}`);
+        alert(copiedMessage || '共有用テキストをコピーしました。');
+    }
+
+    function downloadBlobAsFile(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    async function quickShareOnTwitter() {
+        const hashtags = "Mtps思想診断";
+        const text = buildResultShareText();
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}&url=${encodeURIComponent(MTPS_SITE_URL)}`;
+
+        // QUICK SHARE is for users who do not want to generate or download a result image.
+        // It only opens the X/Twitter intent page with the text result.
+        try {
+            await copyTextToClipboard(`${text}\n#Mtps思想診断\n${MTPS_SITE_URL}`);
+        } catch (copyError) {
+            console.warn('Failed to copy quick share text.', copyError);
+        }
+
+        try {
+            window.location.assign(tweetUrl);
+        } catch (navError) {
+            console.error('Failed to navigate to X quick share URL.', navError);
+            window.location.href = tweetUrl;
+        }
+    }
+
+    async function shareOnTwitter() {
+        const hashtags = "Mtps思想診断";
+        const text = buildResultShareText();
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&hashtags=${encodeURIComponent(hashtags)}&url=${encodeURIComponent(MTPS_SITE_URL)}`;
+        const shareText = `${text}
+#Mtps思想診断
+${MTPS_SITE_URL}`;
+
+        // X/Twitter の intent URL では画像ファイルを自動添付できない。
+        // about:blank を先に開くと環境によってそのまま止まるため、
+        // 1) 共有文をコピー → 2) 画像PNGを保存開始 → 3) 同じタブでXへ移動、の順番にする。
+        let copiedText = false;
+        let savedImage = false;
+        let imageError = null;
+
+        try {
+            copiedText = await copyTextToClipboard(shareText);
+        } catch (copyError) {
+            console.warn('Failed to copy X share text.', copyError);
+        }
+
+        try {
+            const blob = await createResultImageBlob();
+            const code = (document.getElementById('result-code')?.innerText || 'result').replace(/[^A-Za-z0-9_-]+/g, '_');
+            downloadBlobAsFile(blob, `mtps-x-result-${code}-${Date.now()}.png`);
+            savedImage = true;
+            // Give the browser a brief moment to start the download before navigating away.
+            await new Promise((resolve) => setTimeout(resolve, 900));
+        } catch (error) {
+            imageError = error;
+            console.error('Failed to create X share image.', error);
+        }
+
+        const message = savedImage
+            ? (copiedText
+                ? 'X投稿用の結果画像をPNG保存しました。共有文もコピー済みです。OKを押すとXの投稿画面へ移動します。画像は投稿画面で手動添付してください。'
+                : 'X投稿用の結果画像をPNG保存しました。OKを押すとXの投稿画面へ移動します。画像は投稿画面で手動添付してください。')
+            : (copiedText
+                ? '結果画像の作成に失敗しました。共有文はコピー済みです。OKを押すとXの投稿画面へ移動します。必要なら戻ってSAVE IMAGEを試してください。'
+                : '結果画像の作成に失敗しました。OKを押すとXの投稿画面へ移動します。必要なら戻ってSAVE IMAGEを試してください。');
+
+        alert(message);
+
+        // Same-tab navigation avoids popup blocking and the about:blank stuck state.
+        try {
+            window.location.assign(tweetUrl);
+        } catch (navError) {
+            console.error('Failed to navigate to X intent URL.', navError, imageError);
+            window.location.href = tweetUrl;
+        }
+    }
+
+    async function shareResultToApps() {
+        await shareTextOrCopy({
+            title: 'Mtps思想診断',
+            text: `${buildResultShareText()}
+
+この診断を他の人にもやらせる:`,
+            url: MTPS_SITE_URL,
+            copiedMessage: '診断結果と診断ページURLをコピーしました。他のアプリに貼り付けられます。'
+        });
+    }
+
+    async function copyResultShareText() {
+        await copyTextToClipboard(`${buildResultShareText()}
+
+この診断を他の人にもやらせる:
+${MTPS_SITE_URL}`);
+        alert('診断結果と診断ページURLをコピーしました。他のアプリに貼り付けられます。');
+    }
+
+    async function shareDiagnosticInvite() {
+        await shareTextOrCopy({
+            title: 'Mtps思想診断',
+            text: buildInviteShareText(),
+            url: MTPS_SITE_URL,
+            copiedMessage: '診断ページの共有文をコピーしました。他の人に送れます。'
+        });
     }
 
     function openHashtagResults() {
