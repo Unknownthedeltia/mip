@@ -795,6 +795,29 @@
             display: grid;
             gap: 1rem;
         }
+        .credit-video-embed {
+            position: relative;
+            width: 100%;
+            max-width: 560px;
+            aspect-ratio: 16 / 9;
+            margin: 1.5rem auto 0;
+            border: 1px solid rgba(100, 255, 218, 0.35);
+            background: #000;
+            overflow: hidden;
+        }
+        .credit-video-embed iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+        @media (max-width: 820px) {
+            .credit-video-embed {
+                max-width: 100%;
+            }
+        }
         .credit-row {
             display: grid;
             grid-template-columns: minmax(180px, 0.8fr) 1.2fr;
@@ -2394,6 +2417,66 @@
             padding: 0.85rem 0;
             border-bottom: 1px solid rgba(255,255,255,0.07);
         }
+
+        /* ===== Theme toggle switch (visually shows current state) ===== */
+        .theme-switch {
+            position: relative;
+            display: flex;
+            width: 168px;
+            height: 38px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(0,0,0,0.35);
+            cursor: pointer;
+            overflow: hidden;
+            padding: 0;
+            flex-shrink: 0;
+        }
+        body.theme-light .theme-switch {
+            border-color: rgba(15,23,42,0.22);
+            background: rgba(15,23,42,0.06);
+        }
+        .theme-switch-option {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.05em;
+            color: var(--color-dim);
+            transition: color 0.25s ease, font-weight 0.25s ease;
+            pointer-events: none;
+        }
+        .theme-switch-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: calc(50% - 3px);
+            height: calc(100% - 6px);
+            border-radius: 999px;
+            background: var(--color-accent);
+            box-shadow: 0 0 14px rgba(100,255,218,0.35);
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, box-shadow 0.25s ease;
+        }
+        .theme-switch.is-light .theme-switch-thumb {
+            transform: translateX(100%);
+            background: #ffb020;
+            box-shadow: 0 0 14px rgba(255,176,32,0.4);
+        }
+        .theme-switch.is-dark .theme-switch-option.dark {
+            color: var(--color-bg);
+            font-weight: 700;
+        }
+        .theme-switch.is-light .theme-switch-option.light {
+            color: #1a1106;
+            font-weight: 700;
+        }
+        body.theme-light .theme-switch.is-dark .theme-switch-option.dark {
+            color: #ffffff;
+        }
         .option-row:last-child { border-bottom: none; }
         body.theme-light .option-row {
             border-bottom-color: rgba(15,23,42,0.10);
@@ -2451,8 +2534,11 @@
     </style>
 </head>
 <body class="mode-desktop theme-dark">
-    <audio id="bgm-audio" loop preload="auto">
-        <source src="bgm.mp3" type="audio/mpeg">
+    <audio id="bgm-audio-1" preload="auto">
+        <source src="bgm1.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgm-audio-2" preload="auto">
+        <source src="bgm2.mp3" type="audio/mpeg">
     </audio>
 
     <div class="scanline"></div>
@@ -2480,7 +2566,11 @@
             <div class="boot-option-box">
                 <div class="option-row">
                     <div class="option-label">テーマ / THEME</div>
-                    <button id="boot-theme-toggle" class="btn btn-theme" onclick="toggleTheme()" style="padding: 0.4rem 1.2rem; font-size: 0.85rem;">LIGHT MODE</button>
+                    <button id="boot-theme-toggle" class="theme-switch" onclick="toggleTheme()" type="button" role="switch" aria-checked="false" aria-label="テーマ切替">
+                        <span class="theme-switch-option dark">DARK</span>
+                        <span class="theme-switch-option light">LIGHT</span>
+                        <span class="theme-switch-thumb"></span>
+                    </button>
                 </div>
                 <div class="option-row">
                     <div class="option-label">BGM</div>
@@ -2530,7 +2620,7 @@
 
         <!-- Screen 1: Intro (Mode Selection) -->
         <div id="intro-screen" class="screen">
-            <h1>MTPS-INPX DIAGNOSIS v2.0.β</h1>
+            <h1>MTPS-INPX DIAGNOSIS v2.0.0</h1>
             <p class="subtitle">
                 診断モードを選択してください。
             </p>
@@ -2692,12 +2782,19 @@
                     </div>
                     <div class="credit-row">
                         <div class="credit-role">Production support</div>
-                        <div class="credit-name">Gemini、ChatGPT</div>
+                        <div class="credit-name">Gemini、ChatGPT、Claude</div>
                     </div>
                     <div class="credit-row">
                         <div class="credit-role">Special Thanks</div>
                         <div class="credit-name"><a href="https://x.com/Bipolar_xxx" target="_blank" rel="noopener noreferrer">Bipolar_xxx</a></div>
                     </div>
+                    <div class="credit-row">
+                        <div class="credit-role">BGM</div>
+                        <div class="credit-name"><a href="https://www.youtube.com/watch?v=g33LSGLwLzo" target="_blank" rel="noopener noreferrer">TaTa_Chan - endless dream</a></div>
+                    </div>
+                </div>
+                <div class="credit-video-embed">
+                    <iframe src="https://www.youtube.com/embed/g33LSGLwLzo?si=LsEiQpnliFUxkJ-c" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
                 </div>
             </div>
             <button class="btn" onclick="hideCredit()" style="border-color: var(--color-dim); color: var(--color-dim);">BACK TO MENU</button>
@@ -2710,7 +2807,11 @@
                 <h3>表示設定 / DISPLAY</h3>
                 <div class="option-row">
                     <div class="option-label">テーマ / THEME</div>
-                    <button id="theme-toggle" class="btn btn-theme" onclick="toggleTheme()" style="padding: 0.4rem 1.2rem; font-size: 0.85rem;">LIGHT MODE</button>
+                    <button id="theme-toggle" class="theme-switch" onclick="toggleTheme()" type="button" role="switch" aria-checked="false" aria-label="テーマ切替">
+                        <span class="theme-switch-option dark">DARK</span>
+                        <span class="theme-switch-option light">LIGHT</span>
+                        <span class="theme-switch-thumb"></span>
+                    </button>
                 </div>
 
                 <h3 style="margin-top: 1.8rem;">音楽設定 / BGM</h3>
@@ -3941,7 +4042,8 @@
     const noticeScreen = document.getElementById('notice-screen');
     const creditScreen = document.getElementById('credit-screen');
     const optionScreen = document.getElementById('option-screen');
-    const bgmAudio = document.getElementById('bgm-audio');
+    const bgmAudio1 = document.getElementById('bgm-audio-1');
+    const bgmAudio2 = document.getElementById('bgm-audio-2');
     const historyScreen = document.getElementById('history-screen');
     const publicStatsScreen = document.getElementById('public-stats-screen');
     const introScreen = document.getElementById('intro-screen');
@@ -3958,11 +4060,13 @@
         localStorage.setItem('mtps-theme', currentTheme);
         body.classList.remove('theme-light', 'theme-dark');
         body.classList.add(`theme-${currentTheme}`);
-        const label = currentTheme === 'light' ? 'DARK MODE' : 'LIGHT MODE';
-        const toggle = document.getElementById('theme-toggle');
-        if (toggle) toggle.textContent = label;
-        const bootToggle = document.getElementById('boot-theme-toggle');
-        if (bootToggle) bootToggle.textContent = label;
+        const isLight = currentTheme === 'light';
+        [document.getElementById('theme-toggle'), document.getElementById('boot-theme-toggle')].forEach(sw => {
+            if (!sw) return;
+            sw.classList.toggle('is-light', isLight);
+            sw.classList.toggle('is-dark', !isLight);
+            sw.setAttribute('aria-checked', String(isLight));
+        });
     }
 
     function toggleTheme() {
@@ -4098,10 +4202,11 @@
         switchScreen(optionScreen, introScreen);
     }
 
-    // --- BGM ---
+    // --- BGM (bgm1.mp3 plays once, then immediately hands off to looping bgm2.mp3) ---
     let bgmEnabled = localStorage.getItem('mtps-bgm-enabled') === 'true';
     let bgmVolume = parseInt(localStorage.getItem('mtps-bgm-volume'), 10);
     if (isNaN(bgmVolume)) bgmVolume = 50;
+    let bgmHandoffArmed = false;
 
     function syncOptionUI() {
         const bgmBtn = document.getElementById('bgm-toggle');
@@ -4121,7 +4226,9 @@
     }
 
     function applyBgmVolume() {
-        if (bgmAudio) bgmAudio.volume = Math.max(0, Math.min(100, bgmVolume)) / 100;
+        const vol = Math.max(0, Math.min(100, bgmVolume)) / 100;
+        if (bgmAudio1) bgmAudio1.volume = vol;
+        if (bgmAudio2) bgmAudio2.volume = vol;
     }
 
     function setBgmVolume(value) {
@@ -4132,22 +4239,76 @@
         if (volumeLabel) volumeLabel.textContent = `${bgmVolume}%`;
     }
 
+    function armBgmHandoff() {
+        if (!bgmAudio1 || !bgmAudio2 || bgmHandoffArmed) return;
+        bgmHandoffArmed = true;
+
+        // Make sure both tracks are buffered well ahead of time, so every
+        // handoff (in either direction) has zero decode/network delay.
+        try { bgmAudio1.load(); } catch (e) {}
+        try { bgmAudio2.load(); } catch (e) {}
+
+        function wireHandoff(fromAudio, toAudio) {
+            let handoffDone = false;
+            const start = () => {
+                if (handoffDone || !bgmEnabled) return;
+                handoffDone = true;
+                toAudio.currentTime = 0;
+                toAudio.play().catch(() => {});
+            };
+
+            // Primary trigger: fire a hair before fromAudio's natural end so
+            // toAudio is already audible by the time fromAudio stops (gapless).
+            fromAudio.addEventListener('timeupdate', () => {
+                if (handoffDone) return;
+                const remaining = fromAudio.duration - fromAudio.currentTime;
+                if (Number.isFinite(remaining) && remaining <= 0.25) {
+                    start();
+                }
+            });
+
+            // Fallback trigger in case timeupdate granularity misses the window.
+            fromAudio.addEventListener('ended', start);
+
+            // Reset the one-shot flag whenever fromAudio is restarted from the
+            // top, so the handoff can fire again on the next lap.
+            fromAudio.addEventListener('play', () => {
+                if (fromAudio.currentTime < 0.1) handoffDone = false;
+            });
+        }
+
+        // bgm1 -> bgm2 -> bgm1 -> bgm2 ... forever.
+        wireHandoff(bgmAudio1, bgmAudio2);
+        wireHandoff(bgmAudio2, bgmAudio1);
+    }
+
     function updateBgmPlayback() {
-        if (!bgmAudio) return;
+        if (!bgmAudio1 || !bgmAudio2) return;
+        armBgmHandoff();
         if (bgmEnabled) {
-            bgmAudio.loop = true;
-            bgmAudio.play().catch(() => {
+            // If bgm2 is already mid-playback (we're partway through the
+            // bgm1<->bgm2 alternation), leave it running; otherwise start
+            // fresh from bgm1 so every session begins the same way.
+            if (!bgmAudio2.paused) return;
+            bgmAudio1.currentTime = 0;
+            bgmAudio1.play().catch(() => {
                 // Autoplay blocked until a user gesture occurs; will retry on next interaction.
             });
         } else {
-            bgmAudio.pause();
+            bgmAudio1.pause();
+            bgmAudio2.pause();
         }
     }
 
     function toggleBgm() {
         bgmEnabled = !bgmEnabled;
         localStorage.setItem('mtps-bgm-enabled', bgmEnabled);
-        updateBgmPlayback();
+        if (!bgmEnabled) {
+            bgmAudio1.pause();
+            bgmAudio2.pause();
+        } else {
+            updateBgmPlayback();
+        }
         syncOptionUI();
     }
 
@@ -4157,8 +4318,9 @@
 
     // Browsers block autoplay without a user gesture; retry once on first interaction.
     function inpxBgmAutoplayRetry() {
-        if (bgmEnabled && bgmAudio && bgmAudio.paused) {
-            bgmAudio.play().catch(() => {});
+        if (bgmEnabled && bgmAudio1 && bgmAudio2 && bgmAudio1.paused && bgmAudio2.paused) {
+            bgmAudio1.currentTime = 0;
+            bgmAudio1.play().catch(() => {});
         }
         document.removeEventListener('click', inpxBgmAutoplayRetry);
         document.removeEventListener('keydown', inpxBgmAutoplayRetry);
@@ -4167,6 +4329,7 @@
     document.addEventListener('click', inpxBgmAutoplayRetry);
     document.addEventListener('keydown', inpxBgmAutoplayRetry);
     document.addEventListener('touchstart', inpxBgmAutoplayRetry);
+
 
     function showHistory() {
         renderHistory();
